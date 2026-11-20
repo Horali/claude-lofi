@@ -3,6 +3,7 @@ import type { EngineInterface, Register } from 'claude-code'
 import { drawFrame } from '../src/spike-scene'
 import type { Ink, Mood } from '../src/spike-scene'
 import { sceneSvg } from '../src/mock-svg'
+import { cardSvg } from '../src/card-svg'
 
 // SPIKE: throwaway code that answers two questions before the real build.
 // 1. Does $.audio.play({ url }) make sound in the desktop app on Windows?
@@ -25,6 +26,9 @@ const SAMPLE = {
   ],
 }
 const SCENE = sceneSvg()
+// The mock pretends the song started 102 s ago; the card counts up from there by itself.
+const songStartMs = Date.now() - 102_000
+let card: { isPlaying: boolean; svg: string } | undefined
 const STREAM = 'https://channels.fluxfm.de/chillhop/externalembedflxhp/stream.mp3'
 const SPIKE_TOOL = `mcp__${NAME}__spike`
 const FRAME_MS = 125
@@ -291,33 +295,20 @@ export const register: Register = on => {
         $.ui.invalidate('ui.render')
       }
       const nextScene = () => void $.ui.toast('Mock: scenes rotate in the real build.')
+      // Build the card only when play state changes: a new SVG restarts its animations.
+      if (!card || card.isPlaying !== isPlaying) {
+        const elapsedSec = Math.max(0, Math.round((Date.now() - songStartMs) / 1000))
+        card = {
+          isPlaying,
+          svg: cardSvg({ ...SAMPLE.now, station: 'ChillHop · FluxFM', elapsedSec, isPlaying, recent: SAMPLE.recent.slice(0, 3) }),
+        }
+      }
       return (
-        <Box flexDirection="column" gap={1} paddingX={1}>
-          <Box flexDirection="column">
-            <Text dimColor size="caption" weight="semibold">NOW PLAYING</Text>
-            <Text size="heading" weight="semibold">{SAMPLE.now.title}</Text>
-            <Text>{SAMPLE.now.artist}</Text>
-            <Text dimColor size="footnote">{`ChillHop · FluxFM · ${isPlaying ? 'live' : 'paused'}`}</Text>
-          </Box>
-          <Box flexDirection="row" gap={1}>
+        <Box flexDirection="column" gap={1}>
+          <Svg source={card.svg} alt={'Now playing ' + SAMPLE.now.title + ' by ' + SAMPLE.now.artist} />
+          <Box flexDirection="row" gap={1} paddingX={1}>
             <Button key="play" label={isPlaying ? 'Pause' : 'Play'} variant="primary" onPress={toggle} />
             <Button key="next" label="Next scene" onPress={nextScene} />
-          </Box>
-          <Box flexDirection="column">
-            <Text dimColor size="caption" weight="semibold">RECENTLY PLAYED</Text>
-            {SAMPLE.recent.map(t => (
-              <Text size="footnote">
-                <Text dimColor tabular>{t.at + '  '}</Text>
-                {`${t.artist} · ${t.title}`}
-              </Text>
-            ))}
-          </Box>
-          <Box flexDirection="column">
-            <Text dimColor size="caption" weight="semibold">STATIONS</Text>
-            <Text size="footnote">
-              <Text color="claude">● </Text>ChillHop · FluxFM
-            </Text>
-            <Text size="footnote" dimColor>○ more lofi stations, once their terms are checked</Text>
           </Box>
           <Svg source={SCENE} alt="A rainy ASCII city at night, with a small pixel character in headphones" />
         </Box>
