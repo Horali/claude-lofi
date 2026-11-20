@@ -24,9 +24,9 @@ A Claude Code mod. `/music` plays lofi radio and opens a pane beside the chat. T
 - **Tiny widget:** one line with the character's face, a ♪ and the station.
 
 **Making it readable** (the main fixes):
-1. **A bigger, clearer character.** 5 rows tall instead of 3, with a solid outline, a visible headphone band and ear cups, and a face that changes with mood. It's drawn in the theme's accent colour (`claude`), so it stands out from the scenery. It sits in the lower left third, the same spot in every scene, so your eye always finds it. Original design, not Claude FM's character.
-2. **Quiet background, bright subject.** Far layers are `dimColor` (faint), the middle layer is `subtle`, and only the character and a few light sources (moon, windows, fire, stars) are bright. The spike drew everything at the same brightness, which made it noisy.
-3. **Fewer, lighter characters.** Outlines and sparse marks (`. : ' - _ / | ( )`, a few `▄ ▀`) instead of solid `░▓` walls. Lots of empty space, so it feels calm.
+1. **A bigger, clearer character, and the only thing in colour.** 5 rows tall instead of 3, with a solid outline, a visible headphone band and ear cups, and a face that changes with mood. The character is the one coloured thing in the picture: body in the accent colour (`claude`), headphones in a second colour (`suggestion`), and eyes in plain text. Everything around it stays black-and-white ASCII. It sits in the lower left third, the same spot in every scene, so your eye always finds it. Original design, not Claude FM's character.
+2. **A black-and-white world, one coloured subject.** The scenery uses no colour at all, only shades: far layers `dimColor` (faint), the middle layer `subtle`, the near layer plain `text`. Light sources (moon, windows, fire, stars) show up as brighter characters, not as colour. The spike drew everything at the same brightness, which made it noisy.
+3. **Texture from character density, not walls.** The sky stays mostly empty, with small clusters for clouds and stars. Land and water are textured with a ramp from light to dense marks (` . : - = + * # %`), so a ground or sea fades from sparse at the horizon to dense near the bottom. That gives depth without solid `░▓` blocks.
 4. **Calm motion.** One slow parallax drift, a few particles, and the character's head bob at about 80 beats a minute (one nod every 0.75 s). Not everything moves at once.
 5. **A "now playing" line** at the bottom: `♪ ChillHop · FluxFM` on the left, the time of day on the right, both dim.
 
@@ -59,7 +59,7 @@ A Claude Code mod. `/music` plays lofi radio and opens a pane beside the chat. T
  _|=====|_   (head bobs on the beat)
 ```
 
-**About Claude FM as inspiration:** I can't watch videos, so I didn't copy anything from the stream. The mood we're after is the same kind of thing: monochrome ASCII, one small character, slow scenery. Every piece of art here is drawn from scratch.
+**What we take from Claude FM (and what we don't).** I looked at the live stream in the browser. The idea worth borrowing is a general one: a black-and-white ASCII world where only the little character is in colour, plus a small "now playing" label. We don't copy its scenes, its layout, its character (a small orange pixel block) or its look. Our character is a round head with headphones, our scenes are our own five, and every drawing is made from scratch.
 
 ## File layout
 
