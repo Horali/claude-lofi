@@ -300,6 +300,10 @@ export const register: Register = on => {
       }
       const nextScene = () => void $.ui.toast('Mock: scenes rotate in the real build.')
       // Build the card only when play state changes: a new SVG restarts its animations.
+      // In its frame an Svg keeps its own size, so size both to the pane.
+      // About 7.8 CSS pixels per column on the desktop app (a guess to tune).
+      const pxW = Math.max(200, Math.floor(p.bodyColumns * 7.8) - 8)
+      const cardH = Math.round((pxW * 140) / 200)
       if (!card || card.isPlaying !== isPlaying) {
         const elapsedSec = Math.max(0, Math.round((Date.now() - songStartMs) / 1000))
         card = {
@@ -310,17 +314,17 @@ export const register: Register = on => {
       return (
         <Box flexDirection="column" gap={1}>
           <Box position="relative" flexDirection="column">
-            <Svg isInteractive source={card.svg} alt={'Now playing ' + SAMPLE.now.title + ' by ' + SAMPLE.now.artist} />
-            <Box position="absolute" top={0} left={2} flexDirection="row" gap={2}>
+            <Svg isInteractive width={pxW} height={cardH} source={card.svg} alt={'Now playing ' + SAMPLE.now.title + ' by ' + SAMPLE.now.artist} />
+            <Box position="absolute" top={0} left={3} flexDirection="row" gap={2}>
               <Button key="play" plain onPress={toggle}>
-                <Text mono size="footnote" color="claude">{isPlaying ? '❚❚ pause' : '▶ play'}</Text>
+                <Text mono size="caption" color="claude">{isPlaying ? '❚❚ pause' : '▶ play'}</Text>
               </Button>
               <Button key="next" plain onPress={nextScene}>
-                <Text mono size="footnote" dimColor>» next scene</Text>
+                <Text mono size="caption" dimColor>» next scene</Text>
               </Button>
             </Box>
           </Box>
-          <Svg isInteractive source={SCENE} alt="A rainy ASCII city at night, with a small pixel character in headphones" />
+          <Svg isInteractive width={pxW} height={pxW} source={SCENE} alt="A rainy ASCII city at night, with a small pixel character in headphones" />
         </Box>
       )
     }
