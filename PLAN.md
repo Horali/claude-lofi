@@ -54,8 +54,8 @@ claude-lofi/
 ## Audio
 
 - **Station:** FluxFM ChillHop (lofi and chillhop instrumentals, 320k MP3). FluxFM publishes this stream URL on a page titled "Für externe Player" ("for external players"). SomaFM was ruled out because its terms ban third-party apps. The URL is a mod option, so you can swap the station.
-- **First try:** `$.audio.play({ url }, { shouldLoop: true, signal })`. The engine fetches the URL itself. A radio stream never ends, so this may hang or fail. If the call is skipped, fails, or ends within 3 seconds, we use the fallback.
-- **Fallback:** start a small player in the background with `$.process.spawn`. We check for players in this order: `ffplay`, `mpv`, `vlc`, then (Windows only) the Windows Media Player that comes with Windows, driven by a short PowerShell script.
+- **First try:** `$.audio.play({ url }, { shouldLoop: true, signal })`. In the spike, on Windows desktop it gave up after 3 ms (no built-in player), so this is a quick check, not the main path. If the call is skipped, fails, or ends within 3 seconds, we use the fallback.
+- **Fallback:** start a small player in the background with `$.process.spawn`. We check for players in this order: `ffplay`, `mpv`, `vlc`, then (Windows only) the Windows Media Player that comes with Windows, driven by a short PowerShell script. That script must pump window messages (`DoEvents`) or the stream never starts.
 - **Stopping cleanly:** one AbortController per play. Stopping aborts it. For a background player, we also end the loop that reads its output, which kills the process. The engine also kills it when the mod reloads or the session ends.
 
 ## How the mod loads while we build it
@@ -80,3 +80,18 @@ The source lives in this repo, not in a temporary folder.
 - `claude plugin validate .` checks the manifest and hooks.
 - `claude plugin test .` runs the tests: frames are the same width as the pane, every scene draws at narrow and wide widths, the character changes mood with tool calls, and the commands open the pane and toggle the radio.
 - Screenshots of each scene in the real app (kept out of git).
+
+## Spike results (2026-11-21, desktop app on Windows 11)
+
+| Test | Result |
+| --- | --- |
+| Mod loads from the repo through the junction | Yes. It loaded at the end of the turn, and edits reload before the mod's own tool runs. |
+| `$.audio.play({ url }, { shouldLoop: true })` | No sound. The call returned after 3 ms, which means it skipped playback (no built-in player on Windows). |
+| ffplay in the background | Plays. Its clock advanced and the audio buffer was full. Stopping it ends the process; no leftover `ffplay.exe`. |
+| Windows Media Player via PowerShell | Stuck in state 9 ("transitioning") at first. With a `DoEvents` message loop it reached state 3 ("playing"). Stops cleanly; no leftover process. |
+| Player when the mod reloads | The engine kills it, so music is never left orphaned. |
+| Pane opens | Yes, docked beside the chat, 31 columns by 39 rows. |
+| Redraw speed | A steady 8.0 fps. The longest gap between frames was 136 to 273 ms, with a short dip to 6 fps while ffplay started. |
+| After a reload | The pane stays open, but the timer is gone, so the animation freezes. The build must restart the timer in `session.start` if the pane is open. |
+| `claude plugin test` | Works. Frames rendered at 31 and 56 columns are exactly the pane's width. |
+| Screenshots | Claude can't take screenshots of its own app window (a safety rule). Frames are shown from the test kit instead, plus a screenshot from you. |

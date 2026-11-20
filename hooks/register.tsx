@@ -99,12 +99,15 @@ function smoothness(now: number) {
 const wmpScript = (url: string) =>
   [
     "$ErrorActionPreference = 'Stop'",
+    'Add-Type -AssemblyName System.Windows.Forms',
     '$p = New-Object -ComObject WMPlayer.OCX',
     '$p.settings.volume = 60',
     `$p.URL = '${url}'`,
     '$p.controls.play()',
     'Write-Output "pid $PID"',
-    'while ($true) { Start-Sleep -Milliseconds 1000; Write-Output "state $($p.playState)" }',
+    // WMP only moves on while window messages are pumped: without DoEvents a stream stays in state 9.
+    '$n = 0',
+    'while ($true) { [System.Windows.Forms.Application]::DoEvents(); Start-Sleep -Milliseconds 100; if ((++$n % 10) -eq 0) { Write-Output "state $($p.playState)" } }',
   ].join('; ')
 
 function stopAll() {
