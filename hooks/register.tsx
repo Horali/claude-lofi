@@ -1,5 +1,8 @@
 import type { EngineInterface, Register } from 'claude-code'
 
+import { drawFrame } from '../src/spike-scene'
+import type { Ink, Mood } from '../src/spike-scene'
+
 // SPIKE: throwaway code that answers two questions before the real build.
 // 1. Does $.audio.play({ url }) make sound in the desktop app on Windows?
 //    If not, does a background player (ffplay, or Windows Media Player via
@@ -8,6 +11,7 @@ import type { EngineInterface, Register } from 'claude-code'
 
 const NAME = 'lofi-desk'
 const PANE = 'lofi'
+const MINI = 'lofi-mini'
 const STREAM = 'https://channels.fluxfm.de/chillhop/externalembedflxhp/stream.mp3'
 const SPIKE_TOOL = `mcp__${NAME}__spike`
 const FRAME_MS = 125
@@ -173,11 +177,11 @@ export const register: Register = on => {
     await $.tool.register({
       name: 'spike',
       description:
-        'Development spike for the claude-lofi mod. action: open (open the pane), engine ($.audio.play with the stream URL), ' +
+        'Development spike for the claude-lofi mod. action: open (open the pane), widget (open a second pane that asks to start as a widget), engine ($.audio.play with the stream URL), ' +
         'ffplay or wmp (background player), stop, status. Returns diagnostics as JSON.',
       inputSchema: {
         type: 'object',
-        properties: { action: { type: 'string', enum: ['open', 'engine', 'ffplay', 'wmp', 'stop', 'status'] } },
+        properties: { action: { type: 'string', enum: ['open', 'widget', 'engine', 'ffplay', 'wmp', 'stop', 'status'] } },
         required: ['action'],
       },
       isDeferred: false,
@@ -202,7 +206,7 @@ export const register: Register = on => {
   })
 
   on('ui.close', async ($, e, next) => {
-    if (e.id === PANE) {
+    if (e.id === PANE || e.id === MINI) {
       ticker?.cancel()
       ticker = undefined
     }
@@ -227,6 +231,10 @@ export const register: Register = on => {
       const opened = await $.ui.open({ id: PANE, title: 'lofi' })
       ticker ??= $.clock.every(FRAME_MS, () => $.ui.invalidate('ui.render'))
       note = `opened: ${JSON.stringify(opened)}`
+    } else if (action === 'widget') {
+      const opened = await $.ui.open({ id: MINI, title: 'lofi', placement: 'widget' })
+      ticker ??= $.clock.every(FRAME_MS, () => $.ui.invalidate('ui.render'))
+      note = `widget opened: ${JSON.stringify(opened)}`
     } else if (action === 'engine') {
       await playEngine($)
     } else if (action === 'ffplay' || action === 'wmp') {
@@ -247,29 +255,45 @@ export const register: Register = on => {
     return { result: JSON.stringify(report, null, 1) } as never
   })
 
-  on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
+  on('ui.render', { component: 'Pane' }, async ($, e, next) => {
+    if (e.requestId !== PANE && e.requestId !== MINI) return next(e)
     const { Box, Text } = $.ui.resolve(e)
     const now = await $.clock.now()
     renders.push(now)
     if (renders.length > 400) renders = renders.slice(-200)
-    const p = e.props as { bodyColumns: number; placement: string; scroll?: { bodyRows: number } }
-    seat = `${e.surface} ${p.placement} ${p.bodyColumns}x${p.scroll?.bodyRows ?? '?'}`
-    const mood = moodAt(now)
-    if (p.placement === 'widget') return <Text mono>{`(^ᴗ^)♪ ${audio.mode}`}</Text>
-    // Not `h`: JSX compiles to the global `h`, which a local of that name would shadow.
-    const cols = Math.max(16, Math.min(p.bodyColumns, 120))
-    const rows = Math.max(6, Math.min((p.scroll?.bodyRows ?? 20) - 2, 22))
-    const { fps, maxGapMs } = smoothness(now)
+    const p = e.props as {
+      bodyColumns: number
+      placement: string
+      scroll?: { bodyRows: number }
+      anchoredEdges?: readonly string[]
+    }
+    seat = `${e.requestId}: ${e.surface} ${p.placement} ${p.bodyColumns}x${p.scroll?.bodyRows ?? '?'} edges=${JSON.stringify(p.anchoredEdges ?? null)}`
+    const mood = moodAt(now) as Mood
+    const cols = Math.max(12, Math.min(p.bodyColumns, 120))
+    const room = (p.scroll?.bodyRows ?? 14) - 1
+    // A wide, short card: height follows width, and never more than the room.
+    const sceneRows = Math.max(4, Math.min(room, Math.round(cols / 4), 14))
+    const d = new Date(now)
+    const clock = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+    const inkText = (ink: Ink, text: string) =>
+      ink === 'body' ? (
+        <Text color="claude">{text}</Text>
+      ) : ink === 'phones' ? (
+        <Text color="suggestion">{text}</Text>
+      ) : ink === 'faint' ? (
+        <Text dimColor>{text}</Text>
+      ) : ink === 'subtle' ? (
+        <Text color="subtle">{text}</Text>
+      ) : (
+        <Text>{text}</Text>
+      )
     return (
       <Box flexDirection="column">
-        {drawScene(cols, rows, now, mood).map(row => (
+        {drawFrame(cols, sceneRows, now, mood, clock).map(runs => (
           <Text mono wrap="clip">
-            {row}
+            {runs.map(r => inkText(r.ink, r.text))}
           </Text>
         ))}
-        <Text mono dimColor wrap="clip">
-          {`${fps} fps · max gap ${maxGapMs} ms · ${mood} · audio ${audio.mode}: ${audio.isStopped ? 'stopped' : audio.outcome}`}
-        </Text>
       </Box>
     )
   })
