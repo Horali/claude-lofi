@@ -4,6 +4,7 @@ import { drawFrame } from '../src/spike-scene'
 import type { Ink, Mood } from '../src/spike-scene'
 import { sceneSvg } from '../src/mock-svg'
 import { cardSvg } from '../src/card-svg'
+import { paneLayout } from '../src/pane-layout'
 
 // SPIKE: throwaway code that answers two questions before the real build.
 // 1. Does $.audio.play({ url }) make sound in the desktop app on Windows?
@@ -28,7 +29,7 @@ const SAMPLE = {
 const SCENE = sceneSvg()
 // The mock pretends the song started 102 s ago; the card counts up from there by itself.
 const songStartMs = Date.now() - 102_000
-let card: { isPlaying: boolean; svg: string } | undefined
+let card: { key: string; svg: string } | undefined
 const STREAM = 'https://channels.fluxfm.de/chillhop/externalembedflxhp/stream.mp3'
 const SPIKE_TOOL = `mcp__${NAME}__spike`
 const FRAME_MS = 125
@@ -299,23 +300,25 @@ export const register: Register = on => {
         $.ui.invalidate('ui.render')
       }
       const nextScene = () => void $.ui.toast('Mock: scenes rotate in the real build.')
-      // Build the card only when play state changes: a new SVG restarts its animations.
-      // In its frame an Svg keeps its own size, so size both to the pane.
-      // About 7.8 CSS pixels per column on the desktop app (a guess to tune).
-      const pxW = Math.max(200, Math.floor(p.bodyColumns * 7.8) - 8)
-      const cardH = Math.round((pxW * 140) / 200)
-      if (!card || card.isPlaying !== isPlaying) {
+      // In its frame an Svg keeps its own size, so both are sized to the pane.
+      const L = paneLayout(p.bodyColumns, p.scroll?.bodyRows ?? 39)
+      // Rebuild the card only when play state or layout changes: a new SVG restarts its animations.
+      const key = `${isPlaying}|${L.compact}|${L.stripUnits}`
+      if (!card || card.key !== key) {
         const elapsedSec = Math.max(0, Math.round((Date.now() - songStartMs) / 1000))
         card = {
-          isPlaying,
-          svg: cardSvg({ ...SAMPLE.now, station: 'ChillHop · FluxFM', elapsedSec, isPlaying, recent: SAMPLE.recent.slice(0, 3) }),
+          key,
+          svg: cardSvg(
+            { ...SAMPLE.now, station: 'ChillHop · FluxFM', elapsedSec, isPlaying, recent: SAMPLE.recent.slice(0, 3) },
+            { compact: L.compact, stripUnits: L.stripUnits },
+          ),
         }
       }
       return (
-        <Box flexDirection="column" gap={1}>
+        <Box flexDirection="column" alignItems="center" gap={1}>
           <Box position="relative" flexDirection="column">
-            <Svg isInteractive width={pxW} height={cardH} source={card.svg} alt={'Now playing ' + SAMPLE.now.title + ' by ' + SAMPLE.now.artist} />
-            <Box position="absolute" top={0} left={3} flexDirection="row" gap={2}>
+            <Svg isInteractive width={L.cardW} height={L.cardH} source={card.svg} alt={'Now playing ' + SAMPLE.now.title + ' by ' + SAMPLE.now.artist} />
+            <Box position="absolute" top={0} left={L.buttonsLeft} flexDirection="row" gap={2}>
               <Button key="play" plain onPress={toggle}>
                 <Text mono size="caption" color="claude">{isPlaying ? '❚❚ pause' : '▶ play'}</Text>
               </Button>
@@ -324,7 +327,7 @@ export const register: Register = on => {
               </Button>
             </Box>
           </Box>
-          <Svg isInteractive width={pxW} height={pxW} source={SCENE} alt="A rainy ASCII city at night, with a small pixel character in headphones" />
+          <Svg isInteractive width={L.sceneW} height={L.sceneH} source={SCENE} alt="A rainy ASCII city at night, with a small pixel character in headphones" />
         </Box>
       )
     }
