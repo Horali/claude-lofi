@@ -2,6 +2,7 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import { drawFrame } from '../src/spike-scene'
 import type { Ink, Mood } from '../src/spike-scene'
+import { sceneSvg } from '../src/mock-svg'
 
 // SPIKE: throwaway code that answers two questions before the real build.
 // 1. Does $.audio.play({ url }) make sound in the desktop app on Windows?
@@ -12,6 +13,18 @@ import type { Ink, Mood } from '../src/spike-scene'
 const NAME = 'lofi-desk'
 const PANE = 'lofi'
 const MINI = 'lofi-mini'
+const SVG_PANE = 'lofi-svg'
+// Mock data: the real build reads song titles from the stream.
+const SAMPLE = {
+  now: { artist: 'Sample Artist', title: 'Basement Tape' },
+  recent: [
+    { at: '04:31', artist: 'Sample Artist', title: 'Rainy Window' },
+    { at: '04:28', artist: 'Sample Artist', title: 'Moonlit Desk' },
+    { at: '04:24', artist: 'Sample Artist', title: 'Late Bus' },
+    { at: '04:20', artist: 'Sample Artist', title: 'Paper Lanterns' },
+  ],
+}
+const SCENE = sceneSvg()
 const STREAM = 'https://channels.fluxfm.de/chillhop/externalembedflxhp/stream.mp3'
 const SPIKE_TOOL = `mcp__${NAME}__spike`
 const FRAME_MS = 125
@@ -177,11 +190,11 @@ export const register: Register = on => {
     await $.tool.register({
       name: 'spike',
       description:
-        'Development spike for the claude-lofi mod. action: open (open the pane), widget (open a second pane that asks to start as a widget), engine ($.audio.play with the stream URL), ' +
+        'Development spike for the claude-lofi mod. action: open (open the pane), widget (open a second pane that asks to start as a widget), mock (open the SVG mock-up pane), engine ($.audio.play with the stream URL), ' +
         'ffplay or wmp (background player), stop, status. Returns diagnostics as JSON.',
       inputSchema: {
         type: 'object',
-        properties: { action: { type: 'string', enum: ['open', 'widget', 'engine', 'ffplay', 'wmp', 'stop', 'status'] } },
+        properties: { action: { type: 'string', enum: ['open', 'widget', 'mock', 'engine', 'ffplay', 'wmp', 'stop', 'status'] } },
         required: ['action'],
       },
       isDeferred: false,
@@ -235,6 +248,13 @@ export const register: Register = on => {
       const opened = await $.ui.open({ id: MINI, title: 'lofi', placement: 'widget' })
       ticker ??= $.clock.every(FRAME_MS, () => $.ui.invalidate('ui.render'))
       note = `widget opened: ${JSON.stringify(opened)}`
+    } else if (action === 'mock') {
+      ticker?.cancel()
+      ticker = undefined
+      await $.ui.close({ id: PANE }).catch(() => undefined)
+      await $.ui.close({ id: MINI }).catch(() => undefined)
+      const opened = await $.ui.open({ id: SVG_PANE, title: 'lofi' })
+      note = `mock opened: ${JSON.stringify(opened)}, svg ${SCENE.length} chars`
     } else if (action === 'engine') {
       await playEngine($)
     } else if (action === 'ffplay' || action === 'wmp') {
@@ -256,6 +276,53 @@ export const register: Register = on => {
   })
 
   on('ui.render', { component: 'Pane' }, async ($, e, next) => {
+    if (e.requestId === SVG_PANE) {
+      if (e.surface !== 'desktop') {
+        const { Text } = $.ui.resolve(e)
+        return <Text dimColor>The mock-up draws in the desktop app only.</Text>
+      }
+      const { Box, Text, Button, Svg } = $.ui.resolve(e)
+      const p = e.props as { bodyColumns: number; placement: string; scroll?: { bodyRows: number } }
+      seat = `${e.requestId}: ${e.surface} ${p.placement} ${p.bodyColumns}x${p.scroll?.bodyRows ?? '?'}`
+      const isPlaying = !audio.isStopped
+      const toggle = async () => {
+        if (isPlaying) stopAll()
+        else await playProcess($, 'ffplay')
+        $.ui.invalidate('ui.render')
+      }
+      const nextScene = () => void $.ui.toast('Mock: scenes rotate in the real build.')
+      return (
+        <Box flexDirection="column" gap={1} paddingX={1}>
+          <Box flexDirection="column">
+            <Text dimColor size="caption" weight="semibold">NOW PLAYING</Text>
+            <Text size="heading" weight="semibold">{SAMPLE.now.title}</Text>
+            <Text>{SAMPLE.now.artist}</Text>
+            <Text dimColor size="footnote">{`ChillHop · FluxFM · ${isPlaying ? 'live' : 'paused'}`}</Text>
+          </Box>
+          <Box flexDirection="row" gap={1}>
+            <Button key="play" label={isPlaying ? 'Pause' : 'Play'} variant="primary" onPress={toggle} />
+            <Button key="next" label="Next scene" onPress={nextScene} />
+          </Box>
+          <Box flexDirection="column">
+            <Text dimColor size="caption" weight="semibold">RECENTLY PLAYED</Text>
+            {SAMPLE.recent.map(t => (
+              <Text size="footnote">
+                <Text dimColor tabular>{t.at + '  '}</Text>
+                {`${t.artist} · ${t.title}`}
+              </Text>
+            ))}
+          </Box>
+          <Box flexDirection="column">
+            <Text dimColor size="caption" weight="semibold">STATIONS</Text>
+            <Text size="footnote">
+              <Text color="claude">● </Text>ChillHop · FluxFM
+            </Text>
+            <Text size="footnote" dimColor>○ more lofi stations, once their terms are checked</Text>
+          </Box>
+          <Svg source={SCENE} alt="A rainy ASCII city at night, with a small pixel character in headphones" />
+        </Box>
+      )
+    }
     if (e.requestId !== PANE && e.requestId !== MINI) return next(e)
     const { Box, Text } = $.ui.resolve(e)
     const now = await $.clock.now()
