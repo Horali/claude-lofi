@@ -12,6 +12,55 @@ A Claude Code mod. `/music` plays lofi radio and opens a pane beside the chat. T
 | `/music next` | Switches to the next scene. |
 | `/music fm` | Stops our radio and opens the real Claude FM livestream in your browser. |
 
+## Look and layout (v2, after your first test)
+
+**What you saw:** the spike opened as a full-height pane beside the chat. It took a whole column, the character was too small to read, and the scene was a noisy wall of blocks.
+
+**Where it sits.** A mod can't split another pane (like "In this chat") into top and bottom halves. The app owns that layout. What a mod *can* ask for is a **widget**: the small, minimised form of a pane (`$.ui.open({ id, placement: "widget" })`). The desktop app can seat a widget in the **session rail**, the column beside the chat, or in a corner of the chat. That's the closest match to "lofi in the bottom half, under the context pane". The catch: the app decides the widget's exact size and where it starts, and you move it yourself; no code can move it. So the first build step is a mini-spike: open as a widget, read the size the app gives (`bodyColumns`, `scroll.bodyRows`, `anchoredEdges`), and show you. If the widget is too small to be nice, we fall back to the normal pane drawn as a short card at the top of its space.
+
+**Shape.** A **wide, short card** instead of a tall column: about **48 characters wide by 12 rows** (11 rows of scene and 1 "now playing" line). Text characters are about twice as tall as they are wide, so 48×12 looks roughly 2:1 on screen: landscape, filling half of the side column. The scene always draws to the space it's given:
+- **Height** follows width: `rows = clamp(round(cols / 4), 8, 14)`, so it stays a wide strip and never turns into a tall tower.
+- **Narrower than 36 columns:** drop the far layer and keep the character centred.
+- **Tiny widget:** one line with the character's face, a ♪ and the station.
+
+**Making it readable** (the main fixes):
+1. **A bigger, clearer character.** 5 rows tall instead of 3, with a solid outline, a visible headphone band and ear cups, and a face that changes with mood. It's drawn in the theme's accent colour (`claude`), so it stands out from the scenery. It sits in the lower left third, the same spot in every scene, so your eye always finds it. Original design, not Claude FM's character.
+2. **Quiet background, bright subject.** Far layers are `dimColor` (faint), the middle layer is `subtle`, and only the character and a few light sources (moon, windows, fire, stars) are bright. The spike drew everything at the same brightness, which made it noisy.
+3. **Fewer, lighter characters.** Outlines and sparse marks (`. : ' - _ / | ( )`, a few `▄ ▀`) instead of solid `░▓` walls. Lots of empty space, so it feels calm.
+4. **Calm motion.** One slow parallax drift, a few particles, and the character's head bob at about 80 beats a minute (one nod every 0.75 s). Not everything moves at once.
+5. **A "now playing" line** at the bottom: `♪ ChillHop · FluxFM` on the left, the time of day on the right, both dim.
+
+**Sketch** (rainy city at night, 48×12; the real one moves and has colour):
+
+```
+   *        .              .-.         *       .
+        .          *      (   )    .        *
+  .         .              `-'        .
+  _   ___        _     ___           _    ____
+ | |_|: :|  ___ | |   |: :|  _  ___ | |_ |: : |_
+ |:|:|: :| |: :||:|_  |: :| |:||: :||:|:||: : |:|
+   /    .-~~~-.     /        /       /      /
+ /     /       \  /     /        /      /
+      [| ^   ^ |]     ~  /    /     /     /
+   /  [|   ‿   |]   c[_]     /       /     /
+  ____ `-------' ______________________________
+ ♪ ChillHop · FluxFM                night 23:40
+```
+
+**The character's moods:**
+
+```
+  working         vibing           dozing
+  .-~~~-.         .-~~~-.          .-~~~-.     z
+ /       \       /       \    ♪   /       \  z
+[| •   • |]     [| ^   ^ |]       [| -   - |]
+[|   _   |]     [|   ‿   |]       [|   o   |]
+ `-------'       `-------'        `-------'
+ _|=====|_   (head bobs on the beat)
+```
+
+**About Claude FM as inspiration:** I can't watch videos, so I didn't copy anything from the stream. The mood we're after is the same kind of thing: monochrome ASCII, one small character, slow scenery. Every piece of art here is drawn from scratch.
+
 ## File layout
 
 The repo folder is the mod folder. Everything lives in git.
@@ -42,8 +91,8 @@ claude-lofi/
 - Mountains, skylines, waves and clouds come from noise with a new random seed each time a scene starts. You never see exactly the same view twice.
 - The sky follows your real clock: stars and a moon at night, a low sun and warmer marks at dawn and dusk, clouds by day.
 - Scenes rotate every 4 minutes. `/music next` skips ahead.
-- Colors only use the app's theme names (`text`, `subtle`, `inactive`, `claude`, `warning`), never fixed hex. That way it works in light and dark themes. Every `Text` is drawn `mono` so the desktop app uses a monospaced font.
-- The art is sized to the pane's real width (`bodyColumns`). Below about 36 columns it drops the far layers and draws a simpler scene. When the pane is minimised to a widget, it shows a one-line glance: the character and the station name.
+- Colours only use the app's theme names (`text`, `subtle`, `inactive`, `claude`, `warning`) and `dimColor`, never fixed hex. That way it works in light and dark themes. Every `Text` is drawn `mono` so the desktop app uses a monospaced font.
+- The art is sized to the space it gets (`bodyColumns` and `scroll.bodyRows`) as a wide, short card. See **Look and layout** above.
 
 ## How the character reacts
 
