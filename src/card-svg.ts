@@ -13,11 +13,22 @@ export type CardInput = {
   isPlaying: boolean
   recent: readonly Track[]
 }
+/** How the pane wants the card drawn. */
+export type CardLayout = {
+  /** Narrow panes: no cassette, a 140-wide card so the text stays readable. */
+  compact: boolean
+  /** Height of the button strip in card units: one text row, so the pane's buttons sit in it. */
+  stripUnits: number
+}
 
-const W = 200
-const H = 140
-// Room at the top for the play and next buttons, which the pane lays over the card.
-const TOP = 12
+/** Width of the card's drawing space for a layout. */
+export const cardWidth = (compact: boolean) => (compact ? 140 : 200)
+/** Height of the card's drawing space for a layout. */
+export const cardHeight = (l: CardLayout) => 128 + l.stripUnits
+
+// Set at the start of each cardSvg call (drawing is synchronous).
+let W = 200
+let H = 140
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 const cut = (s: string, n: number) => ([...s].length > n ? [...s].slice(0, n - 1).join('') + '…' : s)
@@ -91,7 +102,7 @@ function frame(): string {
   )
 }
 
-const CSS = `
+const css = () => `
 text{font-family:${FONT_STACK};white-space:pre}
 .mono{font-size:4.6px}.small{font-size:4.4px}.digits{font-size:7.5px}
 .label{font-size:3.8px;letter-spacing:1.2px}.title{font-size:8.5px;font-weight:600}.artist{font-size:5.2px}
@@ -111,33 +122,39 @@ text{font-family:${FONT_STACK};white-space:pre}
 @keyframes sweep{0%{transform:translateX(0);opacity:0}15%{opacity:1}85%{opacity:1}100%{transform:translateX(${W - 56}px);opacity:0}}
 ${PALETTE_CSS}`
 
-export function cardSvg(c: CardInput): string {
+export function cardSvg(c: CardInput, l: CardLayout = { compact: false, stripUnits: 12 }): string {
+  W = cardWidth(l.compact)
+  H = cardHeight(l)
+  const TOP = l.stripUnits
+  const X = l.compact ? 14 : 66
+  const mid = TOP / 2
   const recent = c.recent
     .slice(0, 3)
     .map((t, i) => {
       const y = 97 + i * 9
       return (
         `<text x="14" y="${y}" class="accent small">♪</text>` +
-        `<text x="21" y="${y}" class="ink2 small">${esc(cut(`${t.title} — ${t.artist}`, 34))}</text>` +
+        `<text x="21" y="${y}" class="ink2 small">${esc(cut(`${t.title} — ${t.artist}`, l.compact ? 21 : 34))}</text>` +
         `<text x="${W - 14}" y="${y}" class="ink3 small" text-anchor="end">${esc(t.at)}</text>`
       )
     })
     .join('')
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" overflow="hidden" style="display:block;overflow:hidden" class="${c.isPlaying ? 'on' : 'paused'}">` +
-    `<style>${CSS}</style>` +
+    `<style>${css()}</style>` +
     `<rect x="0" y="0" width="${W}" height="${H}" rx="6" class="bg"/>` +
     frame() +
-    `<text x="${W - 14}" y="10.5" class="ink3 label" text-anchor="end">LOFI RADIO</text>` +
-    `<rect x="14" y="13.2" width="${W - 28}" height="0.4" class="ink4"/>` +
+    // Narrow cards need the whole strip for the buttons.
+    (l.compact ? '' : `<text x="${W - 14}" y="${mid + 1.3}" class="ink3 label" text-anchor="end">LOFI RADIO</text>`) +
+    `<rect x="14" y="${TOP - 0.6}" width="${W - 28}" height="0.4" class="ink4"/>` +
     `<g transform="translate(0,${TOP})">` +
-    cassette(13, 14) +
-    `<text x="66" y="19" class="ink3 label">NOW PLAYING</text>` +
-    `<text x="66" y="30" class="ink title">${esc(cut(c.title, 22))}</text>` +
-    `<text x="66" y="38" class="ink2 artist">${esc(cut(c.artist, 30))}</text>` +
-    `<text x="66" y="45" class="ink3 mono">${esc(c.station)}</text>` +
+    (l.compact ? '' : cassette(13, 14)) +
+    `<text x="${X}" y="19" class="ink3 label">NOW PLAYING</text>` +
+    `<text x="${X}" y="30" class="ink title">${esc(cut(c.title, l.compact ? 20 : 22))}</text>` +
+    `<text x="${X}" y="38" class="ink2 artist">${esc(cut(c.artist, 30))}</text>` +
+    `<text x="${X}" y="45" class="ink3 mono">${esc(c.station)}</text>` +
     counter(14, 61, c.elapsedSec) +
-    bars(42, 61, 27, 3.1, 9) +
+    bars(42, 61, Math.floor((W - 76) / 4.3), 3.1, 9) +
     `<circle cx="${W - 32}" cy="57.8" r="1.6" class="accent live"/>` +
     `<text x="${W - 29}" y="59.6" class="ink2 mono">LIVE</text>` +
     `<rect x="14" y="66" width="${W - 28}" height="0.8" class="ink4"/>` +
