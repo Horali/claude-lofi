@@ -124,7 +124,7 @@ export function cardSvg(c: CardInput): string {
     })
     .join('')
   return (
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W * 2.4}" height="${H * 2.4}" class="${c.isPlaying ? 'on' : 'paused'}">` +
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" overflow="hidden" style="display:block;overflow:hidden" class="${c.isPlaying ? 'on' : 'paused'}">` +
     `<style>${CSS}</style>` +
     `<rect x="0" y="0" width="${W}" height="${H}" rx="6" class="bg"/>` +
     frame() +
