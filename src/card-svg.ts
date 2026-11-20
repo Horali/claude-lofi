@@ -15,7 +15,9 @@ export type CardInput = {
 }
 
 const W = 200
-const H = 128
+const H = 140
+// Room at the top for the play and next buttons, which the pane lays over the card.
+const TOP = 12
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 const cut = (s: string, n: number) => ([...s].length > n ? [...s].slice(0, n - 1).join('') + '…' : s)
@@ -126,6 +128,9 @@ export function cardSvg(c: CardInput): string {
     `<style>${CSS}</style>` +
     `<rect x="0" y="0" width="${W}" height="${H}" rx="6" class="bg"/>` +
     frame() +
+    `<text x="${W - 14}" y="10.5" class="ink3 label" text-anchor="end">LOFI RADIO</text>` +
+    `<rect x="14" y="13.2" width="${W - 28}" height="0.4" class="ink4"/>` +
+    `<g transform="translate(0,${TOP})">` +
     cassette(13, 14) +
     `<text x="66" y="19" class="ink3 label">NOW PLAYING</text>` +
     `<text x="66" y="30" class="ink title">${esc(cut(c.title, 22))}</text>` +
@@ -139,6 +144,7 @@ export function cardSvg(c: CardInput): string {
     `<rect x="14" y="65.6" width="28" height="1.6" rx="0.8" class="accent tape"/>` +
     `<text x="14" y="84" class="ink3 label">RECENTLY PLAYED</text>` +
     recent +
+    `</g>` +
     `</svg>`
   )
 }
