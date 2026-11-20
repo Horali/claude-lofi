@@ -1,0 +1,41 @@
+# engine-written type files (regenerated on every load)
+.claude-plugin/types/
+
+# dependencies and build output
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+
+# audio and media: never commit
+*.mp3
+*.aac
+*.ogg
+*.wav
+*.flac
+*.m4a
+*.opus
+*.mp4
+*.webm
+
+# screenshots and images of the desktop
+screenshots/
+*.png
+*.jpg
+*.jpeg
+*.gif
+
+# secrets and env
+.env
+.env.*
+*.pem
+*.key
+
+# os / editor junk
+.DS_Store
+Thumbs.db
+*~
+*.swp
+*.log
+.vscode/
+.idea/
