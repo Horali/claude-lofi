@@ -45,6 +45,7 @@ type AudioDiag = {
 let ticker: { cancel: () => void } | undefined
 let renders: number[] = []
 let seat = 'not drawn yet'
+let svgRenders: number[] = []
 let audio: AudioDiag = { mode: 'off', startedAt: 0, outcome: 'idle', output: [], isStopped: true }
 let engineStop: AbortController | undefined
 let child: AsyncGenerator<unknown, unknown> | undefined
@@ -272,6 +273,8 @@ export const register: Register = on => {
       pane: seat,
       isTicking: ticker !== undefined,
       renders: renders.length,
+      svgRenders: svgRenders.length,
+      svgGapsMs: svgRenders.slice(-8).map((t, i, a) => (i ? t - (a[i - 1] ?? t) : 0)),
       last5s: smoothness(now),
       audio: { ...audio, ageMs: now - audio.startedAt },
       info: await $.session.info().then(i => ({ platform: i.platform, isHosted: i.isHosted })).catch((err: unknown) => String(err)),
@@ -288,6 +291,7 @@ export const register: Register = on => {
       const { Box, Text, Button, Svg } = $.ui.resolve(e)
       const p = e.props as { bodyColumns: number; placement: string; scroll?: { bodyRows: number } }
       seat = `${e.requestId}: ${e.surface} ${p.placement} ${p.bodyColumns}x${p.scroll?.bodyRows ?? '?'}`
+      svgRenders.push(Date.now())
       const isPlaying = !audio.isStopped
       const toggle = async () => {
         if (isPlaying) stopAll()
@@ -305,12 +309,18 @@ export const register: Register = on => {
       }
       return (
         <Box flexDirection="column" gap={1}>
-          <Svg source={card.svg} alt={'Now playing ' + SAMPLE.now.title + ' by ' + SAMPLE.now.artist} />
-          <Box flexDirection="row" gap={1} paddingX={1}>
-            <Button key="play" label={isPlaying ? 'Pause' : 'Play'} variant="primary" onPress={toggle} />
-            <Button key="next" label="Next scene" onPress={nextScene} />
+          <Box position="relative" flexDirection="column">
+            <Svg isInteractive source={card.svg} alt={'Now playing ' + SAMPLE.now.title + ' by ' + SAMPLE.now.artist} />
+            <Box position="absolute" top={0} left={2} flexDirection="row" gap={2}>
+              <Button key="play" plain onPress={toggle}>
+                <Text mono size="footnote" color="claude">{isPlaying ? '❚❚ pause' : '▶ play'}</Text>
+              </Button>
+              <Button key="next" plain onPress={nextScene}>
+                <Text mono size="footnote" dimColor>» next scene</Text>
+              </Button>
+            </Box>
           </Box>
-          <Svg source={SCENE} alt="A rainy ASCII city at night, with a small pixel character in headphones" />
+          <Svg isInteractive source={SCENE} alt="A rainy ASCII city at night, with a small pixel character in headphones" />
         </Box>
       )
     }
