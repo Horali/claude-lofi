@@ -1,0 +1,8 @@
+{
+  "name": "lofi-desk",
+  "version": "0.1.0",
+  "description": "Lofi radio and an animated ASCII scene beside the chat. Type /music.",
+  "author": { "name": "Horali" },
+  "license": "MIT",
+  "network": { "hosts": ["channels.fluxfm.de", "streams.fluxfm.de"] }
+}
