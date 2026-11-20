@@ -2,6 +2,8 @@
 
 A Claude Code mod. `/music` plays lofi radio and opens a pane beside the chat. The pane shows an animated ASCII scene with a small Claude-like character wearing headphones. All art is original.
 
+**Name:** the repo is `claude-lofi`, but the mod itself is called `lofi-desk` (placeholder). Claude Code reserves mod names that start with `claude-` for Anthropic, so `claude plugin validate` refuses `claude-lofi`.
+
 ## Commands
 
 | Command | What it does |
