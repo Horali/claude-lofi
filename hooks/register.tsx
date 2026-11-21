@@ -33,6 +33,8 @@ const WORK_AFTER_MS = 1500
 const WORK_LINGER_MS = 5000
 /** The list slides up once when a song changes; a rebuild later doesn't slide again. */
 const SLIDE_MS = 4000
+/** How often a playing session checks it is still the one meant to play. */
+const CLAIM_MS = 2000
 
 // ---------- state (module variables reset when the mod reloads) ----------
 
@@ -56,6 +58,15 @@ let busySince = 0
 let lastToolAt = Date.now()
 let mood: Mood = 'vibing'
 let tod = timeOfDay(new Date().getHours())
+
+// One radio for the whole computer: every session runs its own copy of this
+// mod, so the session that starts the music writes its name in the shared
+// store, and a playing session that finds another name there stops.
+type Claim = { owner: string; at: number }
+const ME = Math.random().toString(36).slice(2, 10)
+/** Stopped because another session took over the radio. */
+let elsewhere = false
+let lastClaimCheck = 0
 
 let cardCache: { key: string; svg: string } | undefined
 let sceneCache: { key: string; svg: string } | undefined
@@ -160,6 +171,21 @@ function ensureTicker($: EngineInterface) {
       changed = true
     }
     if (now - lastSongCheck > SONG_MS) void checkSong(hostOf($))
+    if (radio.state.isPlaying && now - lastClaimCheck > CLAIM_MS) {
+      lastClaimCheck = now
+      void $.store.get('radio').then(
+        value => {
+          const claim = value as Claim | undefined
+          if (claim && claim.owner !== ME && radio.state.isPlaying) {
+            radio.stop()
+            pausedAt = Date.now()
+            elsewhere = true
+            redraw()
+          }
+        },
+        () => undefined,
+      )
+    }
     if (changed && paneOpen) redraw()
   })
 }
@@ -167,14 +193,24 @@ function ensureTicker($: EngineInterface) {
 async function play($: EngineInterface) {
   ensureTicker($)
   pausedAt = 0
+  elsewhere = false
+  // Claim first, so a session already playing stops within a couple of seconds.
+  await $.store.set('radio', { owner: ME, at: Date.now() } satisfies Claim).catch(() => undefined)
+  lastClaimCheck = Date.now()
   const s = await radio.start(hostOf($), STREAM)
   if (s.isPlaying) void checkSong(hostOf($))
   return s
 }
 
-function pause() {
+async function pause($: EngineInterface) {
   pausedAt = Date.now()
   radio.stop()
+  await releaseClaim($)
+}
+
+async function releaseClaim($: EngineInterface) {
+  const claim = (await $.store.get('radio').catch(() => undefined)) as Claim | undefined
+  if (claim?.owner === ME) await $.store.delete('radio').catch(() => undefined)
 }
 
 async function openPane($: EngineInterface) {
@@ -221,6 +257,7 @@ export const register: Register = on => {
 
   on('session.end', async ($, e, next) => {
     radio.stop()
+    await releaseClaim($)
     ticker?.cancel()
     ticker = undefined
     return next(e)
@@ -234,7 +271,7 @@ export const register: Register = on => {
       return { text: `Scene: ${sceneAt(sceneIndex).name}.` }
     }
     if (arg === 'fm') {
-      pause()
+      await pause($)
       const opened = await openInBrowser(hostOf($), FM_URL)
       return {
         text: opened ? 'Stopped the radio and opened Claude FM in your browser.' : `Stopped the radio. Open Claude FM here: ${FM_URL}`,
@@ -242,7 +279,7 @@ export const register: Register = on => {
     }
     if (arg !== '') return { text: 'Use /music to start or stop, /music next for the next scene, /music fm for Claude FM.' }
     if (radio.state.isPlaying) {
-      pause()
+      await pause($)
       await $.ui.close({ id: PANE }).catch(() => undefined)
       paneOpen = false
       return { text: 'Music stopped.' }
@@ -268,7 +305,7 @@ export const register: Register = on => {
       if (action === 'open') await openPane($)
       else if (action === 'close') await $.ui.close({ id: PANE }).catch(() => undefined)
       else if (action === 'play') await play($)
-      else if (action === 'stop') pause()
+      else if (action === 'stop') await pause($)
       else if (action === 'next') nextScene()
       const report = {
         pane: paneOpen ? 'open' : 'closed',
@@ -302,12 +339,12 @@ export const register: Register = on => {
     const isPlaying = radio.state.isPlaying
     const scene = sceneAt(sceneIndex)
     const toggle = async () => {
-      if (radio.state.isPlaying) pause()
+      if (radio.state.isPlaying) await pause($)
       else await play($)
       redraw()
     }
     const title = current?.title ?? (isPlaying ? `${STATION} live` : 'lofi radio')
-    const artist = current?.artist ?? (isPlaying ? 'finding the song…' : radio.state.problem ?? 'press ▶ play to start')
+    const artist = current?.artist ?? (isPlaying ? 'finding the song…' : (elsewhere ? 'playing in another session · ▶ to play here' : radio.state.problem ?? 'press ▶ play to start'))
 
     if (e.surface !== 'desktop') {
       // Surfaces without Svg (the terminal): a short text version.
