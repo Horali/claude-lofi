@@ -1,12 +1,12 @@
 # lofi-desk
 
-A Claude Code mod that plays lofi radio while you work. Type `/music` and a pane opens beside the chat. At the top is a now-playing card with live song titles, a minutes-played counter and audio level bars. Below it is an animated ASCII scene with a small pixel character in headphones. The character reacts to what Claude is doing:
+A Claude Code mod that plays lofi radio while you work. Type `/music` and a pane opens beside the chat. At the top is a now-playing card with the song name, a slider showing how far into the song you are, and a short playlist (the last song, this one, and "· · ·" for what comes next). Below it is an animated ASCII scene with a small pixel character in headphones. The character reacts to what Claude is doing:
 
 - **working**: nods along and types while a tool call runs;
 - **vibing**: bobs to the music, with notes floating up;
 - **dozing**: `z z z` after two minutes with nothing going on.
 
-There are five original scenes: a rainy city rooftop, a boat on the open sea, a forest campfire, a tiny moon in deep space and a desk by a window. The sky follows your real clock (night, dawn, day, dusk), and the scene changes every four minutes. All art is drawn from scratch for this mod. The world is black-and-white ASCII; only the character and a few accents are in colour.
+There are five original scenes: a rainy city rooftop, a boat on the open sea, a forest campfire, a tiny moon in deep space and a desk by a window. The sky follows your real clock (night, dawn, day, dusk), and the scene changes every four minutes. The character dresses for each scene (a raincoat and umbrella in the city, a sailor cap and fishing rod on the boat, and so on). All art is drawn from scratch for this mod. The world is black-and-white ASCII that gently shimmers: the characters inside each shape keep swapping for look-alikes, so the scene always feels alive. Only the character and a few accents are in colour.
 
 ## Commands
 
@@ -37,7 +37,8 @@ claude plugin install lofi-desk@lofi-desk-market
 ## What it needs
 
 - **A way to play the stream.** It tries these in order: the app's own player (not on Windows), `ffplay` (from ffmpeg), `mpv`, VLC, and on Windows the Windows Media Player that comes with Windows. Installing ffmpeg gives the most reliable playback (`winget install Gyan.FFmpeg` on Windows).
-- **`curl`** for song titles. It ships with Windows 10 and later, macOS and most Linux systems. Every 30 seconds the mod reads 3 seconds of the stream to find the current title.
+- **Song names** come from the song list FluxFM's own website uses (fluxmusic.api.radiosphere.io), checked every 20 seconds. If that is down, the mod reads the stream's title with `curl` instead.
+- **Song lengths** come from Apple's public iTunes search, then MusicBrainz. Only the artist and song title are sent, with no account and nothing about you. A song neither knows shows `--:--`.
 - The pane's pictures draw in the **desktop app**. In a terminal the pane shows a short text version with the same buttons.
 
 ## The station and its terms
