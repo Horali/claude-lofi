@@ -3,7 +3,7 @@
 
 import { character, CHARACTER_CSS } from '../character'
 import { sky } from '../sky'
-import { anim, band, COLS, CW, f1, FONT, H, hash, LH, noise, rows, sceneDoc, W } from '../svg-kit'
+import { anim, band, COLS, CW, f1, FONT, H, hash, LH, noise, motes, ripple, rows, sceneDoc, W } from '../svg-kit'
 import type { Scene } from './types'
 
 const ROOF = 158
@@ -56,7 +56,7 @@ function rooftop(): string {
   const height = Math.ceil((H - ROOF) / LH)
   for (let y = 0; y < height; y++) {
     let line = ''
-    for (let x = 0; x < COLS; x++) {
+    for (let x = 0; x < COLS + 5; x++) {
       if (y === 0) {
         line += '='
         continue
@@ -70,7 +70,7 @@ function rooftop(): string {
   for (let i = 0; i < 6; i++) {
     puddles += `<text x="${f1(20 + hash(i * 9) * (W - 40))}" y="${f1(ROOF + 8 + hash(i * 4) * 22)}" class="ink2 tw a" style="${anim(4.5, hash(i) * 5)}">~~~</text>`
   }
-  return rows(lines, 0, ROOF, 'ink2') + puddles
+  return ripple(lines, ROOF, 'ink2', 5) + puddles
 }
 
 function lamp(x: number): string {
@@ -94,6 +94,7 @@ export const city: Scene = {
         rooftop() +
         lamp(W - 28) +
         rows([' \\|/ ', '--+--', ' /|\\ ', ' [_] '], 12, ROOF - 18, 'ink3') +
+        motes(8, 6, { x: 0, y: 30, w: 170, h: 80 }) +
         character(44, ROOF - 33, 3, mood, { outfit: 'raincoat', prop: 'umbrella' }),
       CHARACTER_CSS,
     )

@@ -3,7 +3,7 @@
 
 import { character, CHARACTER_CSS } from '../character'
 import { sky } from '../sky'
-import { anim, band, f1, H, hash, LH, noise, rows, sceneDoc, W } from '../svg-kit'
+import { anim, band, f1, H, hash, LH, noise, motes, rows, sceneDoc, W } from '../svg-kit'
 import type { Scene } from './types'
 
 const SEA = 112
@@ -63,6 +63,7 @@ function boat(mood: Parameters<typeof character>[3]): string {
   const mast = rows(['|\\', '| \\', '|  \\', '|   \\', '|    \\', '|_____\\'], x + 66, deck - 6 * 4.6 * 1.12 + 1, 'ink2')
   return (
     `<g class="sway a" style="${anim(3.8)}">` +
+    motes(8, 2, { x: 0, y: 30, w: 170, h: 60 }) +
     character(x + 14, deck - 31, 3, mood, { outfit: 'sailor', prop: 'rod' }) +
     mast +
     hull +

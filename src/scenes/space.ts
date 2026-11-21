@@ -3,7 +3,7 @@
 // cratered moon where the character sits. Space has no time of day.
 
 import { character, CHARACTER_CSS } from '../character'
-import { anim, band, COLS, f1, H, hash, LH, noise, rows, sceneDoc, W } from '../svg-kit'
+import { anim, band, COLS, f1, H, hash, LH, noise, motes, ripple, rows, sceneDoc, W } from '../svg-kit'
 import type { Scene } from './types'
 
 const SURFACE = 162
@@ -58,7 +58,7 @@ function surface(): string {
   const height = Math.ceil((H - SURFACE) / LH) + 1
   for (let y = 0; y < height; y++) {
     let line = ''
-    for (let x = 0; x < COLS; x++) {
+    for (let x = 0; x < COLS + 5; x++) {
       if (y === 0) {
         line += noise(x / 6, 5) > 0.7 ? '-' : '_'
         continue
@@ -68,7 +68,7 @@ function surface(): string {
     }
     lines.push(line)
   }
-  return rows(lines, 0, SURFACE, 'ink3')
+  return ripple(lines, SURFACE, 'ink3', 9)
 }
 
 function flag(x: number): string {
@@ -90,6 +90,7 @@ export const space: Scene = {
         comet() +
         surface() +
         flag(160) +
+        motes(12, 8, { x: 0, y: 20, w: 170, h: 110 }) +
         character(52, SURFACE - 31, 3, mood, { outfit: 'helmet', prop: 'float' }),
       CHARACTER_CSS +
         `.comet{opacity:0;animation-name:comet;animation-timing-function:linear}

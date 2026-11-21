@@ -3,7 +3,7 @@
 
 import { character, CHARACTER_CSS } from '../character'
 import { sky } from '../sky'
-import { anim, band, COLS, f1, H, hash, LH, noise, rows, sceneDoc, W } from '../svg-kit'
+import { anim, band, COLS, f1, H, hash, LH, noise, motes, ripple, rows, sceneDoc, W } from '../svg-kit'
 import type { Scene } from './types'
 
 const GROUND = 160
@@ -33,13 +33,13 @@ function ground(): string {
   const height = Math.ceil((H - GROUND) / LH)
   for (let y = 0; y < height; y++) {
     let line = ''
-    for (let x = 0; x < COLS; x++) {
+    for (let x = 0; x < COLS + 5; x++) {
       const n = noise(x / 4, y * 19 + 8) * 0.45 + (y / height) * 0.5
       line += y === 0 ? (hash(x) < 0.25 ? ',' : '_') : ramp[Math.min(ramp.length - 1, Math.floor(n * ramp.length))]
     }
     lines.push(line)
   }
-  return rows(lines, 0, GROUND, 'ink3')
+  return ripple(lines, GROUND, 'ink3', 3)
 }
 
 function tent(x: number): string {
@@ -88,6 +88,7 @@ export const campfire: Scene = {
         tent(12) +
         (tod === 'day' ? '' : fireflies()) +
         fire(132) +
+        motes(10, 4, { x: 0, y: 70, w: 170, h: 60 }, 'ink2') +
         character(70, GROUND - 31, 3, mood, { outfit: 'beanie', prop: 'stick' }),
       CHARACTER_CSS +
         `.frame3{opacity:0;animation-name:frame3;animation-timing-function:steps(1)}
