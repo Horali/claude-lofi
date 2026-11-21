@@ -4,7 +4,7 @@
 
 import { character, CHARACTER_CSS } from '../character'
 import { clouds, moon, stars, sun, type TimeOfDay } from '../sky'
-import { anim, COLS, f1, H, hash, LH, noise, rows, sceneDoc, W } from '../svg-kit'
+import { anim, COLS, CW, f1, H, hash, LH, noise, motes, rows, sceneDoc, W } from '../svg-kit'
 import type { Scene } from './types'
 
 const DESK = 150
@@ -26,20 +26,26 @@ function windowView(tod: TimeOfDay): string {
     tod === 'night' ? stars(9, 1.4, 17) + moon(x + 50, y + 10) : tod === 'day' ? sun(x + 52, y + 8, false) : sun(x + 10, y + 52, true) + stars(4, 0.5, 17)
   let rain = ''
   for (let i = 0; i < 16; i++) {
-    rain += `<rect x="${f1(x + hash(i * 7) * w)}" y="${f1(y)}" width="0.4" height="3" class="ink3 drip a" style="${anim(2.6 + hash(i) * 2.2, hash(i * 9) * 4)}"/>`
+    rain += `<text x="${f1(x + hash(i * 7) * w)}" y="${f1(y)}" class="ink3 drip a" style="${anim(2.6 + hash(i) * 2.2, hash(i * 9) * 4)}">${i % 3 ? "'" : ','}</text>`
   }
+  // The frame in characters: corners, edges and a cross in the middle.
+  const across = Math.round(w / CW)
+  const down = Math.round(h / LH)
+  const half = Math.floor(across / 2)
+  const mid = Math.floor(down / 2)
+  const edge = (l: string, m: string, r: string, fill: string) => l + fill.repeat(half - 1) + m + fill.repeat(across - half - 2) + r
+  const lines = Array.from({ length: down }, (_, i) =>
+    i === 0 ? edge('.', '.', '.', '-') : i === down - 1 ? edge("'", "'", "'", '-') : i === mid ? edge(':', '+', ':', '-') : edge('|', '|', '|', ' '),
+  )
   const frame =
-    `<rect x="${x}" y="${y}" width="${w}" height="${h}" class="frame" stroke-width="1.6"/>` +
-    `<rect x="${x + w / 2 - 0.6}" y="${y}" width="1.2" height="${h}" class="ink3"/>` +
-    `<rect x="${x}" y="${y + h / 2 - 0.6}" width="${w}" height="1.2" class="ink3"/>` +
-    `<rect x="${x - 4}" y="${y + h}" width="${w + 8}" height="2.5" class="ink3"/>`
+    rows(lines, x, y + LH * 0.7, 'ink3') + rows(['[' + '='.repeat(across + 1) + ']'], x - CW * 1.5, y + h + LH * 0.6, 'ink3')
   return `${clip}<g clip-path="url(#win)">${view}${clouds(y + 26, 40, 210, 1.2, 'ink3', 0.8)}${rain}</g>${frame}`
 }
 
 function shelf(): string {
   const books = ['|#|', '|:|', '||', '|=|', '|:|', '/ /']
   let x = 10
-  let out = `<rect x="6" y="56" width="70" height="1.5" class="ink3"/>`
+  let out = rows(['_'.repeat(26)], 6, 57, 'ink3')
   books.forEach((b, i) => {
     const tall = 3 + Math.floor(hash(i * 13) * 2)
     out += rows(Array.from({ length: tall }, () => b), x, 56 - tall * LH + 3, i % 2 ? 'ink2' : 'ink3')
@@ -88,6 +94,7 @@ export const desk: Scene = {
         deskTop() +
         cat(150) +
         rows([' \\|/ ', ' [_] '], 34, DESK - 2 * LH + 1, 'ink3') +
+        motes(12, 7, { x: 4, y: 70, w: 100, h: 70 }, 'ink2') +
         character(58, DESK - 31, 3, mood, { outfit: 'hoodie', prop: 'mug' }),
       CHARACTER_CSS +
         `.drip{animation-name:drip;animation-timing-function:linear}
