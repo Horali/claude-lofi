@@ -23,7 +23,7 @@ const FM_URL = 'https://www.youtube.com/live/tRsQsTMvPNg'
 const OWN_TOOL = `mcp__${NAME}__lofi`
 
 const TICK_MS = 1000
-const SCENE_MS = 4 * 60_000
+const SCENE_MS = 3 * 60_000
 /** How often to ask what's playing. */
 const SONG_MS = 20_000
 const DOZE_MS = 2 * 60_000
