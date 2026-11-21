@@ -1,0 +1,15 @@
+{
+  "name": "lofi-desk-market",
+  "owner": {
+    "name": "Horali"
+  },
+  "description": "lofi-desk: lofi radio and an animated scene beside the chat",
+  "plugins": [
+    {
+      "name": "lofi-desk",
+      "source": "./",
+      "description": "Lofi radio beside the chat: a now-playing card with live song titles and an animated ASCII scene whose pixel character reacts to tool calls. Type /music.",
+      "version": "0.2.0"
+    }
+  ]
+}
