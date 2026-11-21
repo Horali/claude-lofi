@@ -88,7 +88,7 @@ export const campfire: Scene = {
         tent(12) +
         (tod === 'day' ? '' : fireflies()) +
         fire(132) +
-        character(70, GROUND - 31, 3, mood, { mug: true }),
+        character(70, GROUND - 31, 3, mood, { outfit: 'beanie', prop: 'stick' }),
       CHARACTER_CSS +
         `.frame3{opacity:0;animation-name:frame3;animation-timing-function:steps(1)}
 @keyframes frame3{0%{opacity:1}33.3%{opacity:0}}

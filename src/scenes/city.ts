@@ -94,7 +94,7 @@ export const city: Scene = {
         rooftop() +
         lamp(W - 28) +
         rows([' \\|/ ', '--+--', ' /|\\ ', ' [_] '], 12, ROOF - 18, 'ink3') +
-        character(44, ROOF - 33, 3, mood, { mug: true }),
+        character(44, ROOF - 33, 3, mood, { outfit: 'raincoat', prop: 'umbrella' }),
       CHARACTER_CSS,
     )
   },

@@ -56,26 +56,34 @@ test('the sky follows the clock', async () => {
   expect(timeOfDay(18)).toBe('dusk')
 })
 
-test('the card shows the song, the counter and recent songs', async () => {
+test('the card shows the song, the slider and the list', async () => {
   const svg = cardSvg(
     {
       title: 'Basement Tape',
       artist: 'Sample Artist',
       station: 'ChillHop · FluxFM',
-      elapsedSec: 125,
+      elapsedSec: 70,
+      lengthSec: 151,
       isPlaying: true,
-      recent: [{ at: '04:31', artist: 'Sample Artist', title: 'Rainy Window' }],
+      previous: { artist: 'Sample Artist', title: 'Rainy Window' },
+      justChanged: true,
     },
-    { compact: false, stripUnits: 10.5 },
+    { compact: false },
   )
   expect(svg.includes('Basement Tape')).toBe(true)
   expect(svg.includes('Rainy Window')).toBe(true)
-  expect(svg.includes('animation-delay:-125s')).toBe(true)
+  // The slider runs over the song's length, starting 70 s in.
+  expect(svg.includes('animation-duration:151s;animation-delay:-70s')).toBe(true)
+  expect(svg.includes('02:31')).toBe(true)
+  expect(svg.includes('class="slide"')).toBe(true)
   expect(svg.length).toBeLessThan(MAX)
-  const compact = cardSvg(
-    { title: 'A', artist: 'B', station: 'S', elapsedSec: 0, isPlaying: false, recent: [] },
-    { compact: true, stripUnits: 15 },
-  )
-  expect(compact.includes('LOFI RADIO')).toBe(false)
-  expect(compact.includes('paused')).toBe(true)
+  const unknown = cardSvg({ title: 'A', artist: 'B', station: 'S', elapsedSec: 5, isPlaying: false }, { compact: true })
+  expect(unknown.includes('clipPath')).toBe(false)
+  expect(unknown.includes('PAUSED')).toBe(true)
+  expect(unknown.includes('class="slide"')).toBe(false)
+})
+
+test('each scene dresses the character', async () => {
+  const dress: Record<string, string> = { city: 'coat', ocean: 'navy', campfire: 'knit', space: 'glass', desk: 'hood' }
+  for (const scene of SCENES) expect(scene.build({ tod: 'night', mood: 'vibing' }).includes(`class="${dress[scene.id]}"`)).toBe(true)
 })

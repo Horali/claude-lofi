@@ -88,7 +88,7 @@ export const desk: Scene = {
         deskTop() +
         cat(150) +
         rows([' \\|/ ', ' [_] '], 34, DESK - 2 * LH + 1, 'ink3') +
-        character(58, DESK - 31, 3, mood, { mug: true }),
+        character(58, DESK - 31, 3, mood, { outfit: 'hoodie', prop: 'mug' }),
       CHARACTER_CSS +
         `.drip{animation-name:drip;animation-timing-function:linear}
 @keyframes drip{from{transform:translateY(-4px)}to{transform:translateY(${WIN.h + 4}px)}}

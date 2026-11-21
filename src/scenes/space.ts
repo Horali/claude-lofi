@@ -90,7 +90,7 @@ export const space: Scene = {
         comet() +
         surface() +
         flag(160) +
-        character(52, SURFACE - 31, 3, mood, { mug: false }),
+        character(52, SURFACE - 31, 3, mood, { outfit: 'helmet', prop: 'float' }),
       CHARACTER_CSS +
         `.comet{opacity:0;animation-name:comet;animation-timing-function:linear}
 @keyframes comet{0%{transform:translate(${W + 20}px,20px);opacity:0}2%{opacity:1}14%{transform:translate(-30px,70px);opacity:1}15%{opacity:0}100%{opacity:0}}`,

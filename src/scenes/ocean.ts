@@ -63,7 +63,7 @@ function boat(mood: Parameters<typeof character>[3]): string {
   const mast = rows(['|\\', '| \\', '|  \\', '|   \\', '|    \\', '|_____\\'], x + 66, deck - 6 * 4.6 * 1.12 + 1, 'ink2')
   return (
     `<g class="sway a" style="${anim(3.8)}">` +
-    character(x + 14, deck - 31, 3, mood, { mug: false }) +
+    character(x + 14, deck - 31, 3, mood, { outfit: 'sailor', prop: 'rod' }) +
     mast +
     hull +
     `</g>`
