@@ -112,14 +112,19 @@ async function checkSong(host: Host) {
         before = sameSong(current, now) ? previous : current
       }
     }
-    if (!now || sameSong(current, now)) return
-    previous = before
-    current = { ...now }
-    songChangedAt = Date.now()
-    redraw()
-    const len = await lookUpLength(host, now.artist, now.title)
-    if (len && sameSong(current, now)) {
-      current.lengthSec = len
+    if (!now) return
+    if (!sameSong(current, now)) {
+      previous = before
+      current = { ...now }
+      songChangedAt = Date.now()
+      redraw()
+    }
+    // Asked again on every check until found: a busy service shouldn't leave it blank.
+    const song = current
+    if (!song || song.lengthSec !== undefined) return
+    const len = await lookUpLength(host, song.artist, song.title)
+    if (len && current === song) {
+      song.lengthSec = len
       redraw()
     }
   } finally {
