@@ -1,6 +1,6 @@
 {
   "name": "lofi-desk",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Lofi radio beside the chat: a now-playing card with live song titles and an animated ASCII scene whose pixel character reacts to tool calls. Type /music.",
   "author": {
     "name": "Horali"

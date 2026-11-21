@@ -13,7 +13,7 @@ A live now-playing card, a cosy animated ASCII scene, and a little pixel friend 
 
 ## Features
 
-- **Real lofi radio.** Plays [FluxFM ChillHop](https://www.fluxfm.de/) live: instrumental lofi and chillhop at 320 kbit/s, with no account needed.
+- **Real lofi radio.** Plays [FluxFM ChillHop](https://www.fluxfm.de/) live: instrumental lofi and chillhop at 320 kbit/s (it drops to a lighter 64 kbit/s stream by itself while your connection struggles, then goes back), with no account needed.
 - **A now-playing card.** Shows the real song and artist, a slider with the song's length, and a short playlist with the last song, this one, and `· · ·` for what's next. The rows slide up when a new song starts.
 - **Five original scenes.** A rainy city rooftop, a boat at sea, a forest campfire, a tiny moon in deep space and a desk by a window. They change by themselves every three minutes.
 - **The sky follows your clock.** Night, dawn, day and dusk, with stars, a moon or sun, clouds and the odd shooting star.
@@ -86,6 +86,9 @@ The pane also has **▶ play / ❚❚ pause** and **» next scene** buttons. You
 
 **I don't hear anything.**
 Install ffmpeg (see Install above) and run `/music` twice to restart the radio.
+
+**The sound keeps cutting out.**
+Your connection is too slow for 320 kbit/s right now. The mod notices after a couple of cut-outs, switches to FluxFM's lighter stream (the card says "lighter stream"), and tries full quality again after a few minutes. This works with ffplay; other players are not watched.
 
 **Can I pick my own station?**
 Not yet. The mod plays FluxFM ChillHop because FluxFM publishes the stream address for outside players.
