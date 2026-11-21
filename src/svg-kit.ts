@@ -34,10 +34,11 @@ export const f1 = (n: number) => n.toFixed(1)
 
 // ---------- shimmer ----------
 //
-// What makes ASCII feel alive: the shapes stay put, but the characters
-// inside them keep swapping for look-alikes (. for ,  - for ~  : for ;) and
-// specks blink in and out at the edges. Each line is drawn as a few copies
-// with different swaps, shown one at a time, every line on its own beat.
+// What makes ASCII feel alive: a few characters inside each shape slowly
+// trade places with look-alikes (. for ,  - for ~  : for ;). Each line is
+// drawn twice with different swaps that cross-fade, every line on its own
+// slow beat. Kept light on purpose: most of the life comes from things that
+// glide (ripple(), motes()), not from characters flipping.
 
 /** Look-alike characters: a character may become any other in its group. */
 const FAMILIES = [".,`'", ':;', '-~', '=≈', '|!', '*+x', 'il!', 'o°', '^"', '#%', '[{', ']}', '(c']
@@ -46,9 +47,9 @@ for (const f of FAMILIES) for (const ch of f) if (f.length > 1) LOOKALIKE.set(ch
 const SPECKS = ".`',"
 
 /** Share of the look-alike characters swapped in each copy. */
-const SWAP = 0.16
+const SWAP = 0.06
 /** Copies per line. */
-const COPIES = 3
+const COPIES = 2
 
 /** One copy of a line with some characters swapped; copy 0 is the line itself. */
 export function shimmerLine(line: string, seed: number, copy: number): string {
@@ -60,7 +61,7 @@ export function shimmerLine(line: string, seed: number, copy: number): string {
     const fam = LOOKALIKE.get(ch)
     if (fam && r < SWAP) {
       out += fam[Math.floor(hash(seed + i * 31 + copy * 17) * fam.length)]
-    } else if (ch === ' ' && r < 0.035 && ((line[i - 1] ?? ' ') !== ' ' || (line[i + 1] ?? ' ') !== ' ')) {
+    } else if (ch === ' ' && r < 0.012 && ((line[i - 1] ?? ' ') !== ' ' || (line[i + 1] ?? ' ') !== ' ')) {
       out += SPECKS[Math.floor(hash(seed + i + copy) * SPECKS.length)]
     } else out += ch
   }
@@ -82,7 +83,7 @@ export function rows(lines: readonly string[], x: number, y0: number, cls: strin
       // A seed from the content and place, so a rebuild draws the same swaps.
       let seed = (Math.round(x * 13 + (y0 + i * LH) * 101) ^ (r.length * 7_717)) >>> 0
       for (let k = 0; k < r.length; k += 7) seed = (seed * 31 + r.charCodeAt(k)) >>> 0
-      const dur = 1.5 + hash(seed) * 2.1
+      const dur = 6 + hash(seed) * 6
       const copies: string[] = []
       for (let c = 0; c < COPIES; c++) {
         const text = shimmerLine(r, seed, c)
@@ -153,10 +154,12 @@ text{font-family:${FONT_STACK};font-size:${FONT}px;white-space:pre}
 .shoot{opacity:0;animation-name:shoot;animation-timing-function:linear}
 .cross{animation-name:cross;animation-timing-function:linear}
 .halo{opacity:.35}
-.sh2{animation-name:sh2;animation-timing-function:steps(1,end)}
-.sh3{animation-name:sh3;animation-timing-function:steps(1,end)}
-@keyframes sh2{0%{opacity:1}50%,100%{opacity:0}}
-@keyframes sh3{0%{opacity:1}33.33%,100%{opacity:0}}
+.sh2{animation-name:sh2;animation-timing-function:ease-in-out}
+@keyframes sh2{0%,38%{opacity:1}50%,88%{opacity:0}100%{opacity:1}}
+.ripple{animation-name:ripple;animation-timing-function:ease-in-out;animation-direction:alternate}
+@keyframes ripple{from{transform:translateX(-${f1(CW * 1.2)}px)}to{transform:translateX(${f1(CW * 1.2)}px)}}
+.mote{animation-name:mote;animation-timing-function:linear;opacity:0}
+@keyframes mote{0%{opacity:0;transform:translate(0,0)}15%{opacity:.7}85%{opacity:.7}100%{opacity:0;transform:translate(var(--dx),var(--dy))}}
 @keyframes tw{0%,100%{opacity:1}50%{opacity:.2}}
 @keyframes drift{to{transform:translateX(-${f1(COLS * CW)}px)}}
 @keyframes fall{from{transform:translate(0,-8px)}to{transform:translate(-55px,${H + 8}px)}}
@@ -177,4 +180,33 @@ export function sceneDoc(body: string, css: string): string {
     body +
     `</svg>`
   )
+}
+
+/**
+ * Ground texture that sways slowly from side to side, row by row, like wind
+ * over grass or ripples on a roof. Lines should be a bit wider than the view
+ * so the edges never show.
+ */
+export function ripple(lines: readonly string[], y0: number, cls: string, seed = 0): string {
+  return lines
+    .map((line, i) => {
+      const dur = 7 + hash(i * 31 + seed) * 6 - Math.min(i, 6) * 0.5
+      const row = rows([line], -CW * 2, y0 + i * LH, cls)
+      return i === 0 ? row : `<g class="ripple a" style="${anim(dur, hash(i + seed) * dur * 2)}">${row}</g>`
+    })
+    .join('')
+}
+
+/** Specks of dust or pollen gliding slowly through an area and fading. */
+export function motes(n: number, seed: number, area: { x: number; y: number; w: number; h: number }, cls = 'ink3'): string {
+  let out = ''
+  for (let i = 0; i < n; i++) {
+    const r = (k: number) => hash(i * 7_919 + seed * 131 + k)
+    const dur = 9 + r(1) * 10
+    const dx = 14 + r(2) * 26
+    const dy = -6 + r(3) * 9
+    const ch = r(4) < 0.7 ? '.' : r(4) < 0.9 ? "'" : '·'
+    out += `<text x="${f1(area.x + r(5) * area.w)}" y="${f1(area.y + r(6) * area.h)}" class="${cls} mote a" style="--dx:${f1(dx)}px;--dy:${f1(dy)}px;${anim(dur, r(7) * dur)}">${esc(ch)}</text>`
+  }
+  return out
 }
