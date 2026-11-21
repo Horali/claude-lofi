@@ -41,3 +41,19 @@ test('the lofi tool reports its status', async $ => {
   const r = (await $.tool.call({ tool: 'mcp__lofi-desk__lofi', action: 'status' } as never)) as { text?: string }
   expect(JSON.stringify(r).includes('Rainy city')).toBe(true)
 })
+
+test('/music light draws the scene without shimmer or swaying ground', async $ => {
+  const scene = async () => {
+    const ui = await $.ui.mount({ plugin: 'lofi-desk', component: 'Pane', requestId: 'lofi', surface: 'desktop', props: props(62) })
+    const svgs = (await ui.findAll({ type: 'Svg' })) as unknown as { props: { source: string } }[]
+    const source = svgs[1]!.props.source
+    await ui.unmount()
+    return source
+  }
+  expect((await scene()).includes('sh2 a')).toBe(true)
+  const { text } = await $.command.run({ command: 'music', args: 'light' } as never)
+  expect(text?.startsWith('Light motion on')).toBe(true)
+  const light = await scene()
+  expect(light.includes('sh2 a')).toBe(false)
+  expect(light.includes('class="ripple a"')).toBe(false)
+})

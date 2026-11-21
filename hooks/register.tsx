@@ -9,7 +9,7 @@ import { fetchHistory, lookUpLength, type Played } from '../src/nowplaying'
 import { paneLayout } from '../src/pane-layout'
 import { sceneAt } from '../src/scenes'
 import { timeOfDay } from '../src/sky'
-import { setClock } from '../src/svg-kit'
+import { setClock, setMotion, type Motion } from '../src/svg-kit'
 
 // lofi-desk: /music plays lofi radio and opens a pane with a now-playing card
 // and an animated scene. The little character reacts to tool calls.
@@ -67,6 +67,14 @@ const ME = Math.random().toString(36).slice(2, 10)
 /** Stopped because another session took over the radio. */
 let elsewhere = false
 let lastClaimCheck = 0
+
+/** Read from the store on first draw; 'light' trades some motion for less redrawing. */
+let motion: Motion | undefined
+
+async function loadMotion($: EngineInterface): Promise<Motion> {
+  if (!motion) motion = ((await $.store.get('motion').catch(() => undefined)) as Motion | undefined) ?? 'full'
+  return motion
+}
 
 let cardCache: { key: string; svg: string } | undefined
 let sceneCache: { key: string; svg: string } | undefined
@@ -277,7 +285,19 @@ export const register: Register = on => {
         text: opened ? 'Stopped the radio and opened Claude FM in your browser.' : `Stopped the radio. Open Claude FM here: ${FM_URL}`,
       }
     }
-    if (arg !== '') return { text: 'Use /music to start or stop, /music next for the next scene, /music fm for Claude FM.' }
+    if (arg === 'light' || arg === 'full') {
+      motion = arg
+      await $.store.set('motion', arg).catch(() => undefined)
+      sceneCache = undefined
+      redraw()
+      return {
+        text:
+          arg === 'light'
+            ? 'Light motion on: the scenes keep their rain, stars and drifting sky but skip the shimmer and swaying ground, so the app redraws less. /music full to switch back.'
+            : 'Full motion on. /music light uses less of your computer.',
+      }
+    }
+    if (arg !== '') return { text: 'Use /music to start or stop, /music next for the next scene, /music fm for Claude FM, /music light or /music full for how much the scenes move.' }
     if (radio.state.isPlaying) {
       await pause($)
       await $.ui.close({ id: PANE }).catch(() => undefined)
@@ -390,7 +410,9 @@ export const register: Register = on => {
       }
     }
     const ctx = { tod, mood }
-    const sceneKey = `${scene.id}¦${tod}¦${mood}`
+    const level = await loadMotion($)
+    setMotion(level)
+    const sceneKey = `${scene.id}¦${tod}¦${mood}¦${level}`
     if (sceneCache?.key !== sceneKey) sceneCache = { key: sceneKey, svg: scene.build(ctx) }
     return (
       <Box flexDirection="column" alignItems="center" gap={1}>
