@@ -4,6 +4,7 @@
 //
 //   node scripts/preview.mjs pane 31x39,62x39 [scene] [tod] [mood]
 //   node scripts/preview.mjs gallery [tod] [mood]
+//   node scripts/preview.mjs moods [scene] [tod]
 //
 // Serve it with the `preview` entry in .claude/launch.json (port 8790).
 // Needs Node 22.18 or later (it runs the TypeScript sources directly).
@@ -66,7 +67,12 @@ function pane(cols, rows, scene, ctx) {
 let body = ''
 if (mode === 'gallery') {
   const ctx = { tod: a1 ?? 'night', mood: a2 ?? 'vibing' }
-  body = SCENES.map(s => `<div>${label(`${s.name} · ${ctx.tod} · ${ctx.mood} · ${s.build(ctx).length} chars`)}${frame(s.build(ctx), 230, 230)}</div>`).join('')
+  const tiles = SCENES.map(s => `<div>${label(s.name)}${frame(s.build(ctx), 230, 230)}</div>`).join('')
+  body = `<div id="strip" style="display:flex;gap:12px;padding:4px">${tiles}</div>`
+} else if (mode === 'moods') {
+  const scene = SCENES.find(s => s.id === a1) ?? SCENES[4]
+  const tiles = ['working', 'vibing', 'dozing'].map(mood => `<div>${label(mood)}${frame(scene.build({ tod: a2 ?? 'night', mood }), 230, 230)}</div>`).join('')
+  body = `<div id="strip" style="display:flex;gap:12px;padding:4px">${tiles}</div>`
 } else {
   const sizes = (a1 ?? '31x39,62x39').split(',').map(s => s.split('x').map(Number))
   const scene = SCENES.find(s => s.id === a2) ?? SCENES[0]
