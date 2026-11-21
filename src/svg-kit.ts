@@ -32,10 +32,76 @@ export function noise(x: number, seed: number): number {
 export const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 export const f1 = (n: number) => n.toFixed(1)
 
-/** Lines of ASCII art, one <text> per line. */
-export function rows(lines: readonly string[], x: number, y0: number, cls: string, style = ''): string {
-  const st = style ? ` style="${style}"` : ''
-  return lines.map((r, i) => `<text x="${f1(x)}" y="${f1(y0 + i * LH)}" class="${cls}"${st}>${esc(r)}</text>`).join('')
+// ---------- shimmer ----------
+//
+// What makes ASCII feel alive: the shapes stay put, but the characters
+// inside them keep swapping for look-alikes (. for ,  - for ~  : for ;) and
+// specks blink in and out at the edges. Each line is drawn as a few copies
+// with different swaps, shown one at a time, every line on its own beat.
+
+/** Look-alike characters: a character may become any other in its group. */
+const FAMILIES = [".,`'", ':;', '-~', '=≈', '|!', '*+x', 'il!', 'o°', '^"', '#%', '[{', ']}', '(c']
+const LOOKALIKE = new Map<string, string>()
+for (const f of FAMILIES) for (const ch of f) if (f.length > 1) LOOKALIKE.set(ch, f)
+const SPECKS = ".`',"
+
+/** Share of the look-alike characters swapped in each copy. */
+const SWAP = 0.16
+/** Copies per line. */
+const COPIES = 3
+
+/** One copy of a line with some characters swapped; copy 0 is the line itself. */
+export function shimmerLine(line: string, seed: number, copy: number): string {
+  if (copy === 0) return line
+  let out = ''
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i]!
+    const r = hash(seed * 131 + i * 977 + copy * 7_919)
+    const fam = LOOKALIKE.get(ch)
+    if (fam && r < SWAP) {
+      out += fam[Math.floor(hash(seed + i * 31 + copy * 17) * fam.length)]
+    } else if (ch === ' ' && r < 0.035 && ((line[i - 1] ?? ' ') !== ' ' || (line[i + 1] ?? ' ') !== ' ')) {
+      out += SPECKS[Math.floor(hash(seed + i + copy) * SPECKS.length)]
+    } else out += ch
+  }
+  return out
+}
+
+/**
+ * Lines of ASCII art. With shimmer (the default) each line is a few
+ * swapped copies taking turns; still = true draws it plain.
+ */
+export function rows(lines: readonly string[], x: number, y0: number, cls: string, style = '', still = false): string {
+  const at = (i: number) => `x="${f1(x)}" y="${f1(y0 + i * LH)}"`
+  if (still) {
+    const st = style ? ` style="${style}"` : ''
+    return lines.map((r, i) => `<text ${at(i)} class="${cls}"${st}>${esc(r)}</text>`).join('')
+  }
+  return lines
+    .map((r, i) => {
+      // A seed from the content and place, so a rebuild draws the same swaps.
+      let seed = (Math.round(x * 13 + (y0 + i * LH) * 101) ^ (r.length * 7_717)) >>> 0
+      for (let k = 0; k < r.length; k += 7) seed = (seed * 31 + r.charCodeAt(k)) >>> 0
+      const dur = 1.5 + hash(seed) * 2.1
+      const copies: string[] = []
+      for (let c = 0; c < COPIES; c++) {
+        const text = shimmerLine(r, seed, c)
+        if (c > 0 && text === r) continue
+        copies.push(text)
+      }
+      if (copies.length === 1) {
+        const st = style ? ` style="${style}"` : ''
+        return `<text ${at(i)} class="${cls}"${st}>${esc(r)}</text>`
+      }
+      const n = copies.length
+      return copies
+        .map((t, c) => {
+          const st = `${style ? style + ';' : ''}${anim(dur, seed % 97 - (dur * c) / n)}`
+          return `<text ${at(i)} class="${cls} sh${n} a" style="${st}">${esc(t)}</text>`
+        })
+        .join('')
+    })
+    .join('')
 }
 
 /** A band twice the view's width, so sliding it left by one width loops. */
@@ -87,6 +153,10 @@ text{font-family:${FONT_STACK};font-size:${FONT}px;white-space:pre}
 .shoot{opacity:0;animation-name:shoot;animation-timing-function:linear}
 .cross{animation-name:cross;animation-timing-function:linear}
 .halo{opacity:.35}
+.sh2{animation-name:sh2;animation-timing-function:steps(1,end)}
+.sh3{animation-name:sh3;animation-timing-function:steps(1,end)}
+@keyframes sh2{0%{opacity:1}50%,100%{opacity:0}}
+@keyframes sh3{0%{opacity:1}33.33%,100%{opacity:0}}
 @keyframes tw{0%,100%{opacity:1}50%{opacity:.2}}
 @keyframes drift{to{transform:translateX(-${f1(COLS * CW)}px)}}
 @keyframes fall{from{transform:translate(0,-8px)}to{transform:translate(-55px,${H + 8}px)}}
