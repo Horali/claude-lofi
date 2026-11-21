@@ -35,13 +35,11 @@ const input = {
   title: 'Basement Tape',
   artist: 'Sample Artist',
   station: 'ChillHop · FluxFM',
-  elapsedSec: 102,
+  elapsedSec: 70,
+  lengthSec: 151,
   isPlaying: true,
-  recent: [
-    { at: '04:31', artist: 'Sample Artist', title: 'Rainy Window' },
-    { at: '04:28', artist: 'Sample Artist', title: 'Moonlit Desk' },
-    { at: '04:24', artist: 'Sample Artist', title: 'Late Bus' },
-  ],
+  previous: { artist: 'Sample Artist', title: 'Rainy Window' },
+  justChanged: true,
 }
 
 const doc = svg =>
@@ -54,13 +52,13 @@ const btn = 'font:13px system-ui;height:21px;line-height:21px;background:none;bo
 
 function pane(cols, rows, scene, ctx) {
   const L = paneLayout(cols, rows)
-  const card = cardSvg(input, { compact: L.compact, stripUnits: L.stripUnits })
+  const card = cardSvg(input, { compact: L.compact })
   return (
     `<div>${label(`${cols}×${rows}${L.compact ? ' compact' : ''} · ${scene.name} · ${ctx.tod} · ${ctx.mood}`)}` +
     `<div style="width:${cols * COL_PX}px;height:${rows * ROW_PX}px;overflow:hidden;outline:1px solid #444;background:#1f1e1d;color-scheme:dark;display:flex;flex-direction:column;align-items:center;gap:${ROW_PX}px">` +
-    `<div style="position:relative">${frame(card, L.cardW, L.cardH)}` +
-    `<div style="position:absolute;top:0;left:${L.buttonsLeft * COL_PX}px;display:flex;gap:${2 * COL_PX}px">` +
-    `<button style="${btn};color:#e07a4c">▶ play</button><button style="${btn};color:#8a887f">» next scene</button></div></div>` +
+    `${frame(card, L.cardW, L.cardH)}` +
+    `<div style="display:flex;gap:${3 * COL_PX}px">` +
+    `<button style="${btn};color:#e07a4c">❚❚ pause</button><button style="${btn};color:#8a887f">» next scene</button></div>` +
     `${frame(scene.build(ctx), L.sceneW, L.sceneH)}</div></div>`
   )
 }
