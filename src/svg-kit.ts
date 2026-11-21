@@ -72,9 +72,20 @@ export function shimmerLine(line: string, seed: number, copy: number): string {
  * Lines of ASCII art. With shimmer (the default) each line is a few
  * swapped copies taking turns; still = true draws it plain.
  */
+/**
+ * How much the scenes move. 'light' draws the same picture with far fewer
+ * moving parts (no shimmer, still ground, a third of the specks) so the app
+ * has less to redraw on slower machines.
+ */
+export type Motion = 'full' | 'light'
+let motion: Motion = 'full'
+export function setMotion(m: Motion) {
+  motion = m
+}
+
 export function rows(lines: readonly string[], x: number, y0: number, cls: string, style = '', still = false): string {
   const at = (i: number) => `x="${f1(x)}" y="${f1(y0 + i * LH)}"`
-  if (still) {
+  if (still || motion === 'light') {
     const st = style ? ` style="${style}"` : ''
     return lines.map((r, i) => `<text ${at(i)} class="${cls}"${st}>${esc(r)}</text>`).join('')
   }
@@ -192,7 +203,7 @@ export function ripple(lines: readonly string[], y0: number, cls: string, seed =
     .map((line, i) => {
       const dur = 7 + hash(i * 31 + seed) * 6 - Math.min(i, 6) * 0.5
       const row = rows([line], -CW * 2, y0 + i * LH, cls)
-      return i === 0 ? row : `<g class="ripple a" style="${anim(dur, hash(i + seed) * dur * 2)}">${row}</g>`
+      return i === 0 || motion === 'light' ? row : `<g class="ripple a" style="${anim(dur, hash(i + seed) * dur * 2)}">${row}</g>`
     })
     .join('')
 }
@@ -200,7 +211,8 @@ export function ripple(lines: readonly string[], y0: number, cls: string, seed =
 /** Specks of dust or pollen gliding slowly through an area and fading. */
 export function motes(n: number, seed: number, area: { x: number; y: number; w: number; h: number }, cls = 'ink3'): string {
   let out = ''
-  for (let i = 0; i < n; i++) {
+  const count = motion === 'light' ? Math.ceil(n / 3) : n
+  for (let i = 0; i < count; i++) {
     const r = (k: number) => hash(i * 7_919 + seed * 131 + k)
     const dur = 9 + r(1) * 10
     const dx = 14 + r(2) * 26
