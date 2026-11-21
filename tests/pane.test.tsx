@@ -4,7 +4,7 @@ const props = (bodyColumns: number) => ({
   title: 'lofi',
   isFocused: false,
   bodyColumns,
-  placement: 'dock',
+  placement: 'dock' as const,
   scroll: { offset: 0, bodyRows: 39 },
   view: {},
 })
@@ -33,8 +33,8 @@ test('next scene moves to the ocean', async $ => {
 })
 
 test('/music with an unknown word explains the commands', async $ => {
-  const { text } = await $.command.run({ command: 'music', args: 'dance' })
-  expect(text.includes('/music next')).toBe(true)
+  const { text } = await $.command.run({ command: 'music', args: 'dance' } as never)
+  expect((text ?? '').includes('/music next')).toBe(true)
 })
 
 test('the lofi tool reports its status', async $ => {
