@@ -52,7 +52,6 @@ The radio is **FluxFM ChillHop** (instrumental lofi and chillhop, 320 kbit/s MP3
 - `claude plugin validate .` checks the manifest and the hooks module.
 - `claude plugin test .` runs the tests in `tests/`.
 - `node scripts/preview.mjs pane 31x39,62x39 city night vibing` writes `.preview/preview.html`, a stand-in for the desktop pane at the given sizes. `node scripts/sheet.mjs` writes a contact sheet of every scene. Serve `.preview/` with the `preview` entry in `.claude/launch.json` (port 8790). Needs Node 22.18 or later.
-- `PLAN.md` has the design, the decisions and what the spike found.
 
 ## License
 

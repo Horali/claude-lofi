@@ -42,3 +42,6 @@ Thumbs.db
 
 # local previews of rendered frames
 .preview/
+
+# Private design notes, kept locally only
+PLAN.md
