@@ -70,6 +70,8 @@ winget install Gyan.FFmpeg
 | `/music` | Starts the radio and opens the pane. Run it again to stop. |
 | `/music next` | Switches to the next scene. |
 | `/music fm` | Stops the radio and opens the Claude FM livestream on YouTube in your browser. |
+| `/music light` | Calmer scenes that use less of your computer: no shimmer or swaying ground, fewer specks. Remembered across sessions. |
+| `/music full` | Back to full motion (the default). |
 
 The pane also has **▶ play / ❚❚ pause** and **» next scene** buttons. You can ask Claude too, for example "turn on the music" or "next scene".
 

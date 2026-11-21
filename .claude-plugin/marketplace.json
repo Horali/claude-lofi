@@ -9,7 +9,7 @@
       "name": "lofi-desk",
       "source": "./",
       "description": "Lofi radio beside the chat: a now-playing card with live song titles and an animated ASCII scene whose pixel character reacts to tool calls. Type /music.",
-      "version": "0.5.1"
+      "version": "0.6.0"
     }
   ]
 }
