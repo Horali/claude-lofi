@@ -2,6 +2,7 @@
 // the song, a minutes-played counter that ticks by CSS alone, level bars,
 // a live dot, a spark running round the frame, and recently played.
 
+import { anim, smilBegin } from './svg-kit'
 import { FONT_STACK, PALETTE_CSS } from './theme-css'
 
 export type Track = { at: string; artist: string; title: string }
@@ -56,7 +57,7 @@ function counter(x: number, y: number, e: number): string {
 
 function reel(cx: number, cy: number): string {
   return (
-    `<g class="reel" style="transform-origin:${cx}px ${cy}px">` +
+    `<g class="reel" style="transform-origin:${cx}px ${cy}px;${anim(2.6, cx)}">` +
     `<circle cx="${cx}" cy="${cy}" r="5" class="paper"/>` +
     `<rect x="${cx - 0.6}" y="${cy - 4.5}" width="1.2" height="9" class="ink2"/>` +
     `<rect x="${cx - 4.5}" y="${cy - 0.6}" width="9" height="1.2" class="ink2"/>` +
@@ -83,14 +84,14 @@ function bars(x: number, y: number, n: number, w: number, h: number): string {
   for (let i = 0; i < n; i++) {
     const d = (0.55 + ((i * 37) % 23) / 30).toFixed(2)
     const delay = (((i * 53) % 17) / 10).toFixed(2)
-    out += `<rect x="${(x + i * (w + 1.2)).toFixed(1)}" y="${y - h}" width="${w}" height="${h}" class="accent bar" style="animation-duration:${d}s;animation-delay:-${delay}s"/>`
+    out += `<rect x="${(x + i * (w + 1.2)).toFixed(1)}" y="${y - h}" width="${w}" height="${h}" class="accent bar" style="${anim(Number(d), Number(delay))}"/>`
   }
   return `<g shape-rendering="crispEdges">${out}</g>`
 }
 
 function frame(): string {
   const corner = (x: number, y: number, ch: string, delay: number) =>
-    `<text x="${x}" y="${y}" class="ink3 corner" style="animation-delay:-${delay}s">${ch}</text>`
+    `<text x="${x}" y="${y}" class="ink3 corner" style="${anim(3.4, delay)}">${ch}</text>`
   const path = `M8,3 H${W - 8} Q${W - 3},3 ${W - 3},8 V${H - 8} Q${W - 3},${H - 3} ${W - 8},${H - 3} H8 Q3,${H - 3} 3,${H - 8} V8 Q3,3 8,3 Z`
   return (
     `<path d="${path}" class="frame" stroke-width="0.6" stroke-dasharray="1.2 2.4"/>` +
@@ -98,7 +99,7 @@ function frame(): string {
     corner(W - 6.2, 6.8, '✧', 1.3) +
     corner(0.8, H - 0.8, '✧', 2.1) +
     corner(W - 6.2, H - 0.8, '✦', 0.7) +
-    `<circle r="1.1" class="accent"><animateMotion dur="16s" repeatCount="indefinite" path="${path}"/></circle>`
+    `<circle r="1.1" class="accent"><animateMotion dur="16s" begin="${smilBegin(16)}" repeatCount="indefinite" path="${path}"/></circle>`
   )
 }
 
@@ -155,10 +156,10 @@ export function cardSvg(c: CardInput, l: CardLayout = { compact: false, stripUni
     `<text x="${X}" y="45" class="ink3 mono">${esc(c.station)}</text>` +
     counter(14, 61, c.elapsedSec) +
     bars(42, 61, Math.floor((W - 76) / 4.3), 3.1, 9) +
-    `<circle cx="${W - 32}" cy="57.8" r="1.6" class="accent live"/>` +
+    `<circle cx="${W - 32}" cy="57.8" r="1.6" class="accent live" style="${anim(1.6)}"/>` +
     `<text x="${W - 29}" y="59.6" class="ink2 mono">LIVE</text>` +
     `<rect x="14" y="66" width="${W - 28}" height="0.8" class="ink4"/>` +
-    `<rect x="14" y="65.6" width="28" height="1.6" rx="0.8" class="accent tape"/>` +
+    `<rect x="14" y="65.6" width="28" height="1.6" rx="0.8" class="accent tape" style="${anim(7)}"/>` +
     `<text x="14" y="84" class="ink3 label">RECENTLY PLAYED</text>` +
     recent +
     `</g>` +
