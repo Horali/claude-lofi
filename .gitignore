@@ -45,3 +45,6 @@ Thumbs.db
 
 # Private design notes, kept locally only
 PLAN.md
+
+# README animations: rendered from the mod's own art, not screenshots
+!docs/*.gif
