@@ -1,6 +1,6 @@
 # claude-lofi plan
 
-A Claude Code mod. `/music` plays lofi radio and opens a pane beside the chat. The pane shows an animated ASCII scene with a small Claude-like character wearing headphones. All art is original.
+A Claude Code mod. `/music` plays lofi radio and opens a pane beside the chat. The pane shows an animated now-playing card and an ASCII scene with a small pixel character wearing headphones. All art is original.
 
 **Name:** the repo is `claude-lofi`, but the mod itself is called `lofi-desk` (placeholder). Claude Code reserves mod names that start with `claude-` for Anthropic, so `claude plugin validate` refuses `claude-lofi`.
 
@@ -12,54 +12,70 @@ A Claude Code mod. `/music` plays lofi radio and opens a pane beside the chat. T
 | `/music next` | Switches to the next scene. |
 | `/music fm` | Stops our radio and opens the real Claude FM livestream in your browser. |
 
-## Look and layout (v2, after your first test)
+## Look and layout (v3, agreed 2026-11-21)
 
-**What you saw:** the spike opened as a full-height pane beside the chat. It took a whole column, the character was too small to read, and the scene was a noisy wall of blocks.
+This replaces the v2 text-art card. You approved it after testing the mock (`/music` spike action `mock`): "looks good for now, lets just build it first".
 
-**Where it sits.** A mod can't split another pane (like "In this chat") into top and bottom halves. The app owns that layout. What a mod *can* ask for is a **widget**: the small, minimised form of a pane (`$.ui.open({ id, placement: "widget" })`). The desktop app can seat a widget in the **session rail**, the column beside the chat, or in a corner of the chat. That's the closest match to "lofi in the bottom half, under the context pane". The catch: the app decides the widget's exact size and where it starts, and you move it yourself; no code can move it. So the first build step is a mini-spike: open as a widget, read the size the app gives (`bodyColumns`, `scroll.bodyRows`, `anchoredEdges`), and show you. If the widget is too small to be nice, we fall back to the normal pane drawn as a short card at the top of its space.
+**Shape.** The pane fills the side column from top to bottom. On the desktop app it holds two SVG pictures, one under the other:
 
-**Shape.** A **wide, short card** instead of a tall column: about **48 characters wide by 12 rows** (11 rows of scene and 1 "now playing" line). Text characters are about twice as tall as they are wide, so 48×12 looks roughly 2:1 on screen: landscape, filling half of the side column. The scene always draws to the space it's given:
-- **Height** follows width: `rows = clamp(round(cols / 4), 8, 14)`, so it stays a wide strip and never turns into a tall tower.
-- **Narrower than 36 columns:** drop the far layer and keep the character centred.
-- **Tiny widget:** one line with the character's face, a ♪ and the station.
+1. **The song card (top).** Built by `src/card-svg.ts`. It has:
+   - a dashed rounded frame with twinkling ✦ ✧ corners and an orange dot travelling round it;
+   - a pixel cassette with turning reels (left out on the compact card);
+   - NOW PLAYING, the title, the artist and the station;
+   - a `mm:ss` **minutes-played** counter that ticks with CSS alone. The radio sends no song length, so it counts up from when the title changed and never shows a fake progress bar;
+   - orange audio level bars, a pulsing LIVE dot and a sweeping line;
+   - RECENTLY PLAYED, the last three songs with times.
+   A strip at the top of the card, exactly one text row tall, is left empty. The pane lays two plain text buttons over it: `▶ play` / `❚❚ pause` (orange) and `» next scene` (dim).
+2. **The scene (bottom).** Built by `src/mock-svg.ts` for the rainy city. It fills the height left under the card. The world is monochrome ASCII and only the character is in colour. Every motion runs on its own loop of 2 s to almost 5 min, so you never see the whole picture reset.
 
-**Making it readable** (the main fixes):
-1. **A bigger, clearer character, and the only thing in colour.** 5 rows tall instead of 3, with a solid outline, a visible headphone band and ear cups, and a face that changes with mood. The character is the one coloured thing in the picture: body in the accent colour (`claude`), headphones in a second colour (`suggestion`), and eyes in plain text. Everything around it stays black-and-white ASCII. It sits in the lower left third, the same spot in every scene, so your eye always finds it. Original design, not Claude FM's character.
-2. **A black-and-white world, one coloured subject.** The scenery uses no colour at all, only shades: far layers `dimColor` (faint), the middle layer `subtle`, the near layer plain `text`. Light sources (moon, windows, fire, stars) show up as brighter characters, not as colour. The spike drew everything at the same brightness, which made it noisy.
-3. **Texture from character density, not walls.** The sky stays mostly empty, with small clusters for clouds and stars. Land and water are textured with a ramp from light to dense marks (` . : - = + * # %`), so a ground or sea fades from sparse at the horizon to dense near the bottom. That gives depth without solid `░▓` blocks.
-4. **Calm motion.** One slow parallax drift, a few particles, and the character's head bob at about 80 beats a minute (one nod every 0.75 s). Not everything moves at once.
-5. **A "now playing" line** at the bottom: `♪ ChillHop · FluxFM` on the left, the time of day on the right, both dim.
+**Rules we learned in the spike (keep them):**
+- **Draw every `Svg` with `isInteractive`.** As a plain image, the desktop app reloads it about once a second, which restarts every animation. In the sandboxed frame it runs smoothly. The mod itself renders only once (checked with a redraw counter).
+- **In the frame an `Svg` keeps its own size,** so always pass `width` and `height` in CSS pixels. The root `<svg>` uses `width="100%" height="100%"` and `overflow="hidden"`.
+- **Sizes come from `src/pane-layout.ts`** (`paneLayout(cols, rows)`). One column is about **7.8 px** and one row about **21 px** on the desktop app, measured from a screenshot of a 62×39 pane. Under about 43 columns the card goes compact (no cassette, no LOFI RADIO label). The card stops growing at 560 px and is centred. The scene height is clamped to 0.8–1.35 × its width, and it crops with `xMidYMax slice` so the ground and the character stay in view.
+- **Only rebuild an SVG when it really changes** (play state, layout, song, scene, mood), because a new source restarts its animations. Pass the elapsed seconds in as negative `animation-delay`s, so a rebuilt SVG carries on from where it was.
+- **The app can't detect clicks inside an SVG.** Buttons are native `Button`s laid over the card with an absolute `Box` (`top={0}`, `left={buttonsLeft}`, in text cells).
+- **Terminal and other surfaces** have no `Svg`, so they get a short text fallback: the now-playing line and the play/next buttons.
 
-**Sketch** (rainy city at night, 48×12; the real one moves and has colour):
+**Checking a layout without the app.** `.preview/` (gitignored) is served on port 8790 by the `preview` entry in `.claude/launch.json`. It holds a stand-in pane that uses the same layout maths and the same sandboxed iframes, at several sizes side by side. Use it to check sizes before asking for a screenshot. Zoom the browser view to 100%: a view scaled to fit makes the frames look cropped when they aren't. The script that builds it should live in the repo (`scripts/preview.mjs`) so a new session can run it.
 
-```
-   *        .              .-.         *       .
-        .          *      (   )    .        *
-  .         .              `-'        .
-  _   ___        _     ___           _    ____
- | |_|: :|  ___ | |   |: :|  _  ___ | |_ |: : |_
- |:|:|: :| |: :||:|_  |: :| |:||: :||:|:||: : |:|
-   /    .-~~~-.     /        /       /      /
- /     /       \  /     /        /      /
-      [| ^   ^ |]     ~  /    /     /     /
-   /  [|   ‿   |]   c[_]     /       /     /
-  ____ `-------' ______________________________
- ♪ ChillHop · FluxFM                night 23:40
-```
+**What we take from Claude FM (and what we don't).** The idea is general: a black-and-white ASCII world where only a little character has colour. We don't copy its scenes, layout, character or look. Our character is our own 16×11 pixel sprite (headphone band, ear cups, round face, blink, bob, a mug with steam). All five scenes are drawn from scratch.
 
-**The character's moods:**
+## Build checklist (the full build)
 
-```
-  working         vibing           dozing
-  .-~~~-.         .-~~~-.          .-~~~-.     z
- /       \       /       \    ♪   /       \  z
-[| •   • |]     [| ^   ^ |]       [| -   - |]
-[|   _   |]     [|   ‿   |]       [|   o   |]
- `-------'       `-------'        `-------'
- _|=====|_   (head bobs on the beat)
-```
+Work in small commits, pushing to `main` after each one. Check every visual change in the local preview before you report it.
 
-**What we take from Claude FM (and what we don't).** I looked at the live stream in the browser. The idea worth borrowing is a general one: a black-and-white ASCII world where only the little character is in colour, plus a small "now playing" label. We don't copy its scenes, its layout, its character (a small orange pixel block) or its look. Our character is a round head with headphones, our scenes are our own five, and every drawing is made from scratch.
+1. **Preview script.** Add `scripts/preview.mjs`. It imports the TS sources (Node 22+ strips types; copying to `.mts` with fixed import paths also works), writes `.preview/preview.html` with the card and scene in sandboxed iframes at sizes given on the command line (for example `31x39,62x39`), using `paneLayout`.
+2. **Clean up the spike.** Remove the text-frame panes (`lofi`, `lofi-mini`), `src/spike-scene.ts`, the widget test and the `spike` tool once `/music` replaces them. Keep the audio code (`playProcess` with ffplay, then mpv, vlc and the WMP PowerShell fallback).
+3. **Audio and song titles.** One module, `src/audio.ts`.
+   - Start and stop the stream.
+   - Read the **ICY metadata**: connect with the header `Icy-MetaData: 1`, read `icy-metaint` (8192 on FluxFM), and parse `StreamTitle='Artist - Title'` after every metaint bytes.
+   - Keep the last 3 titles with their start times. A new title resets the counter.
+   - This needs a second, small connection that reads metadata only (`$.http` / fetch if the engine allows streaming bodies, or a small helper process). Check which works on Windows first.
+4. **Scenes.** Five original scenes as SVG builders sharing `theme-css.ts` and the character: city rain (exists), ocean boat, forest campfire, space, desk by a window.
+   - Each uses long, staggered loops.
+   - The sky follows the real clock (night, dawn, day, dusk), picked when the scene is built.
+   - Scenes rotate every 4 minutes. `» next scene` and `/music next` skip ahead.
+5. **Character moods.** These change the sprite inside the scene SVG:
+   - **working:** typing or nodding while a tool call runs;
+   - **vibing:** bobbing to the music;
+   - **dozing:** `z z z` after 2 minutes with no tool calls.
+   The SVG is rebuilt only when the mood changes.
+6. **Commands.**
+   - `/music` toggles the radio and opens or closes the pane.
+   - `/music next` switches the scene.
+   - `/music fm` stops our radio and opens https://www.youtube.com/live/tRsQsTMvPNg in the browser. It never downloads or rips audio.
+   - Restart the ticker after a reload in `session.start`.
+7. **Tests** (`claude plugin test .`):
+   - the layout maths at 31, 45, 62 and 96 columns;
+   - every scene builds, stays under 131072 characters and has no `<script>`;
+   - the card shows the title and the counter;
+   - moods follow tool calls;
+   - `/music` opens the pane and toggles the radio;
+   - the terminal fallback.
+8. **README** (install, commands, stream terms: FluxFM publishes the URL on its "Für externe Player" page; ask Queen Hora before making the repo public), `.claude-plugin/marketplace.json`, and an icon (`claude plugin validate` asks for one).
+9. **Finish.**
+   - `claude plugin validate .` and `claude plugin test .` must pass.
+   - Show each scene in the local preview and ask Queen Hora for app screenshots.
 
 ## File layout
 
@@ -73,11 +89,14 @@ claude-lofi/
   hooks/register.tsx               wiring only: commands, pane, tool-call hooks, timers
   src/engine/rng.ts                seeded random numbers
   src/engine/noise.ts              1-D value noise for mountains, waves, skylines, clouds
-  src/engine/canvas.ts             a grid of characters; layers are painted back to front
   src/engine/sky.ts                time of day (dawn, day, dusk, night), sun, moon, stars
   src/engine/particles.ts          rain, snow, fireflies, sparks, shooting stars
-  src/character.ts                 the headphone character: typing, nodding, dozing frames
-  src/scenes/*.ts                  city, ocean, campfire, space, desk
+  src/theme-css.ts                 palette and font shared by every SVG (light and dark)
+  src/card-svg.ts                  the now-playing card
+  src/pane-layout.ts               card and scene sizes from the pane's columns and rows
+  src/character.ts                 the pixel character: working, vibing, dozing
+  src/scenes/*.ts                  city, ocean, campfire, space, desk (each returns an SVG)
+  scripts/preview.mjs              builds the local stand-in pane in .preview/
   src/audio.ts                     start and stop the radio, with the fallback players
   types/index.d.ts                 the shapes of the values the mod keeps in $.state
   tests/*.test.ts(x)               run by `claude plugin test`
@@ -85,14 +104,10 @@ claude-lofi/
 
 ## How the animation works
 
-- A timer (`$.clock.every(125)`) bumps a frame counter 8 times a second while the pane is open. The pane redraws when the counter changes. No timer runs while the pane is closed.
-- Each frame is a pure function: `scene.draw(canvas, time, frame, world)`. The same inputs always give the same picture, so tests can check frames without the app.
-- A scene is a stack of layers, back to front: sky, far layer, middle layer, near layer, particles, character. Far layers scroll slowly and near layers scroll fast. That difference is the parallax.
-- Mountains, skylines, waves and clouds come from noise with a new random seed each time a scene starts. You never see exactly the same view twice.
-- The sky follows your real clock: stars and a moon at night, a low sun and warmer marks at dawn and dusk, clouds by day.
-- Scenes rotate every 4 minutes. `/music next` skips ahead.
-- Colours only use the app's theme names (`text`, `subtle`, `inactive`, `claude`, `warning`) and `dimColor`, never fixed hex. That way it works in light and dark themes. Every `Text` is drawn `mono` so the desktop app uses a monospaced font.
-- The art is sized to the space it gets (`bodyColumns` and `scroll.bodyRows`) as a wide, short card. See **Look and layout** above.
+- Motion runs inside the SVGs (CSS keyframes and SMIL), not by redrawing the pane. The pane only redraws when something changes: the song, the play state, the scene, the mood or the pane size.
+- Each loop has its own length (2 s to almost 5 min), so the picture as a whole never visibly resets.
+- Colours come from CSS classes in `theme-css.ts`, with a `prefers-color-scheme` block for dark mode. Only the character and the accents are in colour.
+- See **Look and layout (v3)** for sizing.
 
 ## How the character reacts
 
