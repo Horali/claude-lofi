@@ -19,6 +19,8 @@ const PANE = 'lofi'
 const STATION = 'ChillHop'
 const STATION_LABEL = 'ChillHop · FluxFM'
 const STREAM = 'https://channels.fluxfm.de/chillhop/externalembedflxhp/stream.mp3'
+/** FluxFM's own 64 kbit/s AAC copy, played while the connection can't keep up with 320 kbit/s. */
+const STREAM_LIGHT = 'https://channels.fluxfm.de/chillhop/externalembedflxhp/stream.aac'
 const FM_URL = 'https://www.youtube.com/live/tRsQsTMvPNg'
 const OWN_TOOL = `mcp__${NAME}__lofi`
 
@@ -205,7 +207,7 @@ async function play($: EngineInterface) {
   // Claim first, so a session already playing stops within a couple of seconds.
   await $.store.set('radio', { owner: ME, at: Date.now() } satisfies Claim).catch(() => undefined)
   lastClaimCheck = Date.now()
-  const s = await radio.start(hostOf($), STREAM)
+  const s = await radio.start(hostOf($), { full: STREAM, light: STREAM_LIGHT })
   if (s.isPlaying) void checkSong(hostOf($))
   return s
 }
@@ -390,7 +392,8 @@ export const register: Register = on => {
     // Rebuild an SVG only when what it shows changes; animations are pinned
     // to the clock, so a rebuilt one carries on where it was.
     setClock(now / 1000)
-    const cardKey = [isPlaying, L.compact, title, artist, current?.startMs, current?.lengthSec, previous?.title].join('¦')
+    const light = isPlaying && radio.state.quality === 'light'
+    const cardKey = [isPlaying, light, L.compact, title, artist, current?.startMs, current?.lengthSec, previous?.title].join('¦')
     if (cardCache?.key !== cardKey) {
       cardCache = {
         key: cardKey,
@@ -398,7 +401,7 @@ export const register: Register = on => {
           {
             title,
             artist,
-            station: STATION_LABEL,
+            station: light ? `${STATION_LABEL} · lighter stream` : STATION_LABEL,
             elapsedSec: elapsedSec(now),
             lengthSec: current?.lengthSec,
             isPlaying,

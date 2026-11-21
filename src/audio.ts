@@ -6,12 +6,18 @@
 // music is never left playing after the mod stops.
 
 import type { Host } from './host'
+import { lastQueueKB, type Quality, QualityGuard } from './quality'
+
+/** The same station at two qualities; the lighter one is used while the connection struggles. */
+export type Stream = { full: string; light: string }
 
 export type PlayerName = 'engine' | 'ffplay' | 'mpv' | 'vlc' | 'wmp'
 
 export type RadioState = {
   isPlaying: boolean
   player?: PlayerName
+  /** Which stream plays; 'light' while the connection is too slow for full quality. */
+  quality?: Quality
   /** Why the last start failed, for the pane and the command's reply. */
   problem?: string
 }
@@ -31,7 +37,8 @@ const wmpScript = (url: string, volume: number) =>
 function argvFor(player: PlayerName, url: string, volume: number): string[] {
   switch (player) {
     case 'ffplay':
-      return ['ffplay', '-nodisp', '-hide_banner', '-loglevel', 'error', '-volume', String(volume), url]
+      // -stats prints the buffer size, which tells us when the sound is cutting out.
+      return ['ffplay', '-nodisp', '-hide_banner', '-loglevel', 'error', '-stats', '-volume', String(volume), url]
     case 'mpv':
       return ['mpv', '--no-video', '--really-quiet', `--volume=${volume}`, url]
     case 'vlc':
@@ -56,6 +63,7 @@ export class Radio {
   private child?: AsyncGenerator<unknown, unknown>
   private players?: PlayerName[]
   private generation = 0
+  private guard = new QualityGuard()
 
   constructor(private onChange: () => void) {}
 
@@ -70,9 +78,11 @@ export class Radio {
     return this.players
   }
 
-  async start(host: Host, url: string, volume = 60): Promise<RadioState> {
+  async start(host: Host, stream: Stream, volume = 60): Promise<RadioState> {
     this.stop()
     const gen = ++this.generation
+    this.guard.reset()
+    const url = stream.full
     const windows = (await host.platform()) === 'windows'
     if (!windows && (await this.tryEngine(host, url, gen))) return this.state
     const players = await this.available(host, windows)
@@ -82,7 +92,7 @@ export class Radio {
       this.onChange()
       return this.state
     }
-    this.spawn(host, players, 0, url, volume, gen)
+    this.spawn(host, players, 0, stream, volume, gen)
     return this.state
   }
 
@@ -108,7 +118,7 @@ export class Radio {
     return true
   }
 
-  private spawn(host: Host, players: PlayerName[], i: number, url: string, volume: number, gen: number) {
+  private spawn(host: Host, players: PlayerName[], i: number, stream: Stream, volume: number, gen: number) {
     const player = players[i]
     if (!player) {
       this.state = { isPlaying: false, problem: 'Every audio player stopped right away. Is the network up?' }
@@ -116,22 +126,35 @@ export class Radio {
       return
     }
     const startedAt = Date.now()
-    const stream = host.spawn(argvFor(player, url, volume))
-    this.child = stream as unknown as AsyncGenerator<unknown, unknown>
-    this.state = { isPlaying: true, player }
+    const quality = this.guard.quality
+    const child = host.spawn(argvFor(player, stream[quality], volume))
+    this.child = child as unknown as AsyncGenerator<unknown, unknown>
+    this.guard.restart()
+    this.state = { isPlaying: true, player, quality }
     this.onChange()
     void (async () => {
+      let change: Quality | undefined
       try {
-        for await (const _ of stream) {
+        for await (const piece of child) {
           if (gen !== this.generation) break
+          const text = (piece as { text?: string }).text
+          const kb = player === 'ffplay' && text ? lastQueueKB(text) : undefined
+          change = kb === undefined ? undefined : this.guard.feed(kb)
+          if (change) break
         }
       } catch {
         // could not start: fall through to the next player
       }
       if (gen !== this.generation) return
+      // Too slow (or better again): the same player on the other stream.
+      if (change) {
+        this.child = undefined
+        this.spawn(host, players, i, stream, volume, gen)
+        return
+      }
       // The player ended on its own. Quickly means it could not play: try the next.
       this.child = undefined
-      if (Date.now() - startedAt < 4000) this.spawn(host, players, i + 1, url, volume, gen)
+      if (Date.now() - startedAt < 4000) this.spawn(host, players, i + 1, stream, volume, gen)
       else {
         this.state = { isPlaying: false, problem: `${player} stopped.` }
         this.onChange()
