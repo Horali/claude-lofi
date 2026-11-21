@@ -6,7 +6,7 @@ A Claude Code mod that plays lofi radio while you work. Type `/music` and a pane
 - **vibing**: bobs to the music, with notes floating up;
 - **dozing**: `z z z` after two minutes with nothing going on.
 
-There are five original scenes: a rainy city rooftop, a boat on the open sea, a forest campfire, a tiny moon in deep space and a desk by a window. The sky follows your real clock (night, dawn, day, dusk), and the scene changes every four minutes. The character dresses for each scene (a raincoat and umbrella in the city, a sailor cap and fishing rod on the boat, and so on). All art is drawn from scratch for this mod. The world is black-and-white ASCII that gently shimmers: the characters inside each shape keep swapping for look-alikes, so the scene always feels alive. Only the character and a few accents are in colour.
+There are five original scenes: a rainy city rooftop, a boat on the open sea, a forest campfire, a tiny moon in deep space and a desk by a window. The sky follows your real clock (night, dawn, day, dusk), and the scene changes every three minutes. The character dresses for each scene (a raincoat and umbrella in the city, a sailor cap and fishing rod on the boat, and so on). All art is drawn from scratch for this mod. The world is black-and-white ASCII that is always gently alive: ground textures sway like wind, specks of dust drift past, and a few characters slowly trade places with look-alikes. Only the character and a few accents are in colour.
 
 ## Commands
 
