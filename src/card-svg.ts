@@ -122,14 +122,23 @@ function slider(x0: number, x1: number, y: number, c: CardInput): string {
   const total = c.lengthSec
   const at = Math.min(c.elapsedSec, total)
   const run = `animation-duration:${total}s;animation-delay:-${at}s`
-  let wave = `M${x0},${y}`
-  for (let x = x0; x <= x1; x += 1) wave += ` L${x.toFixed(1)},${(y - 1.6 - Math.sin((x - x0) / 2.2) * 1.1).toFixed(2)}`
+  // Two waves, one period longer than the bar, sliding sideways forever
+  // (like a phone's player) so the played part never looks frozen.
+  const wavePath = (k: number, amp: number) => {
+    const period = 2 * Math.PI * k
+    let d = `M${(x0 - period).toFixed(1)},${y - 1.6}`
+    for (let x = x0 - period; x <= x1 + 1; x += 0.8) d += ` L${x.toFixed(1)},${(y - 1.6 - Math.sin((x - x0) / k) * amp).toFixed(2)}`
+    return { d, period }
+  }
+  const w1 = wavePath(2.2, 1.1)
+  const w2 = wavePath(3.4, 0.7)
   return (
     `<defs><clipPath id="played"><rect x="${x0}" y="${y - 5}" width="${len}" height="7" class="grow" style="${run}"/></clipPath></defs>` +
     `<line x1="${x0}" y1="${y}" x2="${x1}" y2="${y}" class="track"/>` +
     `<g clip-path="url(#played)">` +
     `<rect x="${x0}" y="${y - 0.6}" width="${len}" height="1.2" rx="0.6" class="accent"/>` +
-    `<path d="${wave}" class="wave"/>` +
+    `<path d="${w1.d}" class="wave flow a" style="--p:${w1.period.toFixed(2)}px;${anim(1.8)}"/>` +
+    `<path d="${w2.d}" class="wave flow a soft" style="--p:${w2.period.toFixed(2)}px;${anim(3.1)}"/>` +
     `</g>` +
     `<circle cx="${x0}" cy="${y}" r="1.9" class="accent knob" style="--len:${len}px;${run}"/>` +
     `<text x="${W - 14}" y="${y + 2}" class="ink3 digits" text-anchor="end">${mmss(total)}</text>`
@@ -161,7 +170,9 @@ text{font-family:${FONT_STACK};white-space:pre}
 .roll6{animation-name:roll6;animation-timing-function:steps(6);animation-iteration-count:infinite}
 .roll10{animation-name:roll10;animation-timing-function:steps(10);animation-iteration-count:infinite}
 .track{stroke-width:0.8;stroke-linecap:round}
-.wave{fill:none;stroke-width:0.5;opacity:.75}
+.wave{fill:none;stroke-width:0.5;opacity:.75}.wave.soft{opacity:.4}
+.flow{animation-name:flow;animation-timing-function:linear}
+@keyframes flow{from{transform:translateX(0)}to{transform:translateX(var(--p))}}
 .grow{transform-box:fill-box;transform-origin:left center;animation-name:grow;animation-timing-function:linear;animation-fill-mode:both}
 .knob{animation-name:knob;animation-timing-function:linear;animation-fill-mode:both}
 .sweep{animation-name:sweep;animation-timing-function:ease-in-out}
