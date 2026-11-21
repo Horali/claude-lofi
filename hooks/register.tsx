@@ -1,375 +1,341 @@
 import type { EngineInterface, Register } from 'claude-code'
 
-import { drawFrame } from '../src/spike-scene'
-import type { Ink, Mood } from '../src/spike-scene'
-import { sceneSvg } from '../src/mock-svg'
-import { cardSvg } from '../src/card-svg'
+import { openInBrowser, Radio } from '../src/audio'
+import { cardSvg, type Track } from '../src/card-svg'
+import type { Mood } from '../src/character'
+import type { Host } from '../src/host'
+import { readStreamTitle, splitTitle, type Song } from '../src/icy'
 import { paneLayout } from '../src/pane-layout'
+import { sceneAt } from '../src/scenes'
+import { timeOfDay } from '../src/sky'
+import { setClock } from '../src/svg-kit'
 
-// SPIKE: throwaway code that answers two questions before the real build.
-// 1. Does $.audio.play({ url }) make sound in the desktop app on Windows?
-//    If not, does a background player (ffplay, or Windows Media Player via
-//    PowerShell) start and stop cleanly?
-// 2. Does a pane open and redraw smoothly at about 8 frames a second?
+// lofi-desk: /music plays lofi radio and opens a pane with a now-playing card
+// and an animated scene. The little character reacts to tool calls.
 
 const NAME = 'lofi-desk'
 const PANE = 'lofi'
-const MINI = 'lofi-mini'
-const SVG_PANE = 'lofi-svg'
-// Mock data: the real build reads song titles from the stream.
-const SAMPLE = {
-  now: { artist: 'Sample Artist', title: 'Basement Tape' },
-  recent: [
-    { at: '04:31', artist: 'Sample Artist', title: 'Rainy Window' },
-    { at: '04:28', artist: 'Sample Artist', title: 'Moonlit Desk' },
-    { at: '04:24', artist: 'Sample Artist', title: 'Late Bus' },
-    { at: '04:20', artist: 'Sample Artist', title: 'Paper Lanterns' },
-  ],
-}
-const SCENE = sceneSvg()
-// The mock pretends the song started 102 s ago; the card counts up from there by itself.
-const songStartMs = Date.now() - 102_000
-let card: { key: string; svg: string } | undefined
+const STATION = 'ChillHop'
+const STATION_LABEL = 'ChillHop · FluxFM'
 const STREAM = 'https://channels.fluxfm.de/chillhop/externalembedflxhp/stream.mp3'
-const SPIKE_TOOL = `mcp__${NAME}__spike`
-const FRAME_MS = 125
+const FM_URL = 'https://www.youtube.com/live/tRsQsTMvPNg'
+const OWN_TOOL = `mcp__${NAME}__lofi`
 
-type AudioMode = 'off' | 'engine' | 'ffplay' | 'wmp'
-type AudioDiag = {
-  mode: AudioMode
-  startedAt: number
-  outcome: string
-  output: string[]
-  isStopped: boolean
-}
+const TICK_MS = 1000
+const SCENE_MS = 4 * 60_000
+const TITLE_MS = 30_000
+const DOZE_MS = 2 * 60_000
+/** A tool call must run this long before the character switches to work. */
+const WORK_AFTER_MS = 1500
+/** And it keeps working this long after the last call, so it doesn't flicker. */
+const WORK_LINGER_MS = 5000
 
+// ---------- state (module variables reset when the mod reloads) ----------
+
+let redraw = () => {}
+const radio = new Radio(() => redraw())
+
+let paneOpen = false
 let ticker: { cancel: () => void } | undefined
-let renders: number[] = []
-let seat = 'not drawn yet'
-let svgRenders: number[] = []
-let audio: AudioDiag = { mode: 'off', startedAt: 0, outcome: 'idle', output: [], isStopped: true }
-let engineStop: AbortController | undefined
-let child: AsyncGenerator<unknown, unknown> | undefined
+let sceneIndex = 0
+let sceneStartedAt = Date.now()
+
+let song: Song | undefined
+let songStartedAt = Date.now()
+let pausedElapsed = 0
+let recent: Track[] = []
+let checkingTitle = false
+let lastTitleCheck = 0
+
 let busy = 0
-let lastToolAt = 0
+let busySince = 0
+let lastToolAt = Date.now()
+let mood: Mood = 'vibing'
+let tod = timeOfDay(new Date().getHours())
 
-// ---------- drawing ----------
+let cardCache: { key: string; svg: string } | undefined
+let sceneCache: { key: string; svg: string } | undefined
 
-function hash(n: number): number {
-  let x = Math.imul(n ^ 0x9e3779b9, 0x85ebca6b)
-  x ^= x >>> 13
-  x = Math.imul(x, 0xc2b2ae35)
-  x ^= x >>> 16
-  return (x >>> 0) / 4294967296
+// ---------- helpers ----------
+
+const hhmm = (ms: number) => {
+  const d = new Date(ms)
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
+const mmss = (sec: number) => `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(Math.floor(sec % 60)).padStart(2, '0')}`
 
-function skyline(g: string[][], w: number, h: number, offset: number, width: number, maxH: number, ch: string, seed: number) {
-  for (let x = 0; x < w; x++) {
-    const wx = Math.floor(x + offset)
-    const b = Math.floor(wx / width)
-    const bh = Math.floor(1 + hash(b * 31 + seed) * maxH)
-    for (let y = Math.max(0, h - bh); y < h; y++) {
-      const isWindow = wx % width !== 0 && (y + b) % 2 === 0 && hash(wx * 7 + y * 13 + seed) < 0.35
-      g[y]![x] = isWindow ? '·' : ch
-    }
+/** The host functions the audio and title code use, built from the engine. */
+function hostOf($: EngineInterface): Host {
+  return {
+    run: async (argv, timeoutMs) => {
+      const r = await $.process.run(argv, { timeoutMs })
+      return { exitCode: r.exitCode, stdout: r.stdout }
+    },
+    spawn: argv => $.process.spawn({ argv }),
+    platform: async () => (await $.session.info().catch(() => undefined))?.platform,
+    after: (ms, fn) => void $.clock.after(ms, fn),
+    playEngine: (url, signal) => $.audio.play({ url }, { shouldLoop: true, signal }),
   }
 }
 
-function drawScene(w: number, h: number, now: number, mood: string): string[] {
-  const t = now / 1000
-  const g: string[][] = Array.from({ length: h }, () => Array<string>(w).fill(' '))
-  for (let y = 0; y < Math.floor(h / 2); y++) {
-    for (let x = 0; x < w; x++) {
-      const r = hash(x * 131 + y * 977)
-      if (r < 0.03) g[y]![x] = Math.sin(t * 2 + r * 1000) > 0.5 ? '*' : '.'
-    }
-  }
-  skyline(g, w, h, t * 0.7, 7, Math.floor(h * 0.55), '░', 11)
-  skyline(g, w, h, t * 2, 5, Math.floor(h * 0.35), '▓', 23)
-  const drops = Math.floor((w * h) / 22)
-  for (let i = 0; i < drops; i++) {
-    const speed = 9 + hash(i * 7) * 7
-    const y = (hash(i * 17) * h + t * speed) % h
-    const x = Math.floor((hash(i * 13) * w - y * 0.5 + w * 4) % w)
-    const yi = Math.floor(y)
-    if (g[yi]![x] === ' ') g[yi]![x] = '/'
-  }
-  const beat = Math.floor(t * 2) % 2
-  const face = mood === 'working' ? (beat ? '(•_•)' : '(•ᴗ•)') : mood === 'dozing' ? '(-_-)' : beat ? '(^‿^)' : '(^ᴗ^)'
-  const sprite = [' ╭───╮ ', `${beat && mood !== 'dozing' ? '♪' : ' '}${face}${mood === 'dozing' ? 'z' : ' '}`, ' ╰┬─┬╯ ']
-  sprite.forEach((line, i) => {
-    const y = h - sprite.length + i
-    for (let j = 0; j < line.length && j + 2 < w; j++) g[y]![j + 2] = line[j]!
-  })
-  return g.map(row => row.join(''))
-}
-
-function moodAt(now: number): string {
-  if (busy > 0) return 'working'
-  if (lastToolAt > 0 && now - lastToolAt > 120_000) return 'dozing'
+function moodAt(now: number): Mood {
+  if (busy > 0 && now - busySince > WORK_AFTER_MS) return 'working'
+  if (mood === 'working' && now - lastToolAt < WORK_LINGER_MS) return 'working'
+  if (now - lastToolAt > DOZE_MS) return 'dozing'
   return 'vibing'
 }
 
-function smoothness(now: number) {
-  const recent = renders.filter(t => now - t < 5000)
-  let maxGap = 0
-  for (let i = 1; i < recent.length; i++) maxGap = Math.max(maxGap, recent[i]! - recent[i - 1]!)
-  return { fps: Math.round((recent.length / 5) * 10) / 10, maxGapMs: maxGap }
+function elapsedSec(now: number): number {
+  return radio.state.isPlaying ? Math.max(0, Math.floor((now - songStartedAt) / 1000)) : pausedElapsed
 }
 
-// ---------- audio ----------
-
-const wmpScript = (url: string) =>
-  [
-    "$ErrorActionPreference = 'Stop'",
-    'Add-Type -AssemblyName System.Windows.Forms',
-    '$p = New-Object -ComObject WMPlayer.OCX',
-    '$p.settings.volume = 60',
-    `$p.URL = '${url}'`,
-    '$p.controls.play()',
-    'Write-Output "pid $PID"',
-    // WMP only moves on while window messages are pumped: without DoEvents a stream stays in state 9.
-    '$n = 0',
-    'while ($true) { [System.Windows.Forms.Application]::DoEvents(); Start-Sleep -Milliseconds 100; if ((++$n % 10) -eq 0) { Write-Output "state $($p.playState)" } }',
-  ].join('; ')
-
-function stopAll() {
-  engineStop?.abort()
-  engineStop = undefined
-  if (child) {
-    const c = child
-    child = undefined
-    void c.return(undefined).catch(() => undefined)
-  }
-  audio.isStopped = true
-}
-
-async function playEngine($: EngineInterface) {
-  stopAll()
-  const ctl = new AbortController()
-  engineStop = ctl
-  const a: AudioDiag = { mode: 'engine', startedAt: await $.clock.now(), outcome: 'pending: no answer yet', output: [], isStopped: false }
-  audio = a
-  $.audio.play({ url: STREAM }, { shouldLoop: true, signal: ctl.signal }).then(
-    async () => {
-      a.outcome = `resolved after ${(await $.clock.now()) - a.startedAt} ms`
-    },
-    async (err: unknown) => {
-      a.outcome = `rejected after ${(await $.clock.now()) - a.startedAt} ms: ${String(err)}`
-    },
-  )
-}
-
-async function playProcess($: EngineInterface, mode: 'ffplay' | 'wmp') {
-  stopAll()
-  const argv =
-    mode === 'ffplay'
-      ? ['ffplay', '-nodisp', '-hide_banner', '-loglevel', 'error', '-stats', '-volume', '60', STREAM]
-      : ['powershell.exe', '-NoProfile', '-NonInteractive', '-Command', wmpScript(STREAM)]
-  const a: AudioDiag = { mode, startedAt: await $.clock.now(), outcome: 'starting', output: [], isStopped: false }
-  audio = a
-  const stream = $.process.spawn({ argv })
-  child = stream as unknown as AsyncGenerator<unknown, unknown>
-  void (async () => {
-    try {
-      for await (const chunk of stream) {
-        const text = String((chunk as { text?: string }).text ?? '').replace(/\s+/g, ' ').trim()
-        if (text) {
-          a.output.push(text.slice(-120))
-          if (a.output.length > 6) a.output.shift()
-        }
-        a.outcome = 'running'
-        if (a.isStopped) break
-      }
-      a.outcome = `ended: ${JSON.stringify(await stream.result.catch((err: unknown) => String(err)))}`
-    } catch (err) {
-      a.outcome = `failed: ${String(err)}`
+async function checkTitle($: EngineInterface) {
+  if (checkingTitle) return
+  checkingTitle = true
+  lastTitleCheck = Date.now()
+  try {
+    const next = splitTitle(await readStreamTitle(hostOf($), STREAM), STATION)
+    if (next && (!song || next.title !== song.title || next.artist !== song.artist)) {
+      if (song) recent = [{ at: hhmm(songStartedAt), ...song }, ...recent].slice(0, 3)
+      song = next
+      songStartedAt = Date.now()
+      redraw()
     }
-  })()
+  } finally {
+    checkingTitle = false
+  }
+}
+
+/** One timer while the pane is open or music plays: mood, scene, sky, titles. */
+function ensureTicker($: EngineInterface) {
+  redraw = () => void $.ui.invalidate('ui.render')
+  if (ticker) return
+  ticker = $.clock.every(TICK_MS, () => {
+    const now = Date.now()
+    if (!paneOpen && !radio.state.isPlaying) {
+      ticker?.cancel()
+      ticker = undefined
+      return
+    }
+    let changed = false
+    const m = moodAt(now)
+    if (m !== mood) {
+      mood = m
+      changed = true
+    }
+    if (now - sceneStartedAt > SCENE_MS) {
+      sceneIndex++
+      sceneStartedAt = now
+      changed = true
+    }
+    const t = timeOfDay(new Date(now).getHours())
+    if (t !== tod) {
+      tod = t
+      changed = true
+    }
+    if (radio.state.isPlaying && now - lastTitleCheck > TITLE_MS) void checkTitle($)
+    if (changed && paneOpen) redraw()
+  })
+}
+
+async function play($: EngineInterface) {
+  ensureTicker($)
+  songStartedAt = Date.now() - pausedElapsed * 1000
+  const s = await radio.start(hostOf($), STREAM)
+  if (s.isPlaying) {
+    lastTitleCheck = 0
+    void checkTitle($)
+  }
+  return s
+}
+
+function pause() {
+  pausedElapsed = elapsedSec(Date.now())
+  radio.stop()
+}
+
+async function openPane($: EngineInterface) {
+  paneOpen = true
+  ensureTicker($)
+  await $.ui.open({ id: PANE, title: 'lofi' })
+}
+
+function nextScene() {
+  sceneIndex++
+  sceneStartedAt = Date.now()
+  redraw()
+}
+
+function nowLine(): string {
+  if (!song) return radio.state.isPlaying ? `${STATION_LABEL}, live` : 'Radio off'
+  return song.artist ? `${song.title} by ${song.artist}` : song.title
 }
 
 // ---------- wiring ----------
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
-    await $.command.register({ name: 'music', description: 'Lofi radio and an animated scene (spike build)' })
+    await $.command.register({
+      name: 'music',
+      description: 'Lofi radio with an animated scene. /music toggles it, /music next changes the scene, /music fm opens Claude FM',
+      argumentHint: '[next | fm]',
+    })
     await $.tool.register({
-      name: 'spike',
+      name: 'lofi',
       description:
-        'Development spike for the claude-lofi mod. action: open (open the pane), widget (open a second pane that asks to start as a widget), mock (open the SVG mock-up pane), engine ($.audio.play with the stream URL), ' +
-        'ffplay or wmp (background player), stop, status. Returns diagnostics as JSON.',
+        'Control the lofi-desk pane and radio when the user asks. action: open (show the pane), close, play, stop, next (next scene), status.',
       inputSchema: {
         type: 'object',
-        properties: { action: { type: 'string', enum: ['open', 'widget', 'mock', 'engine', 'ffplay', 'wmp', 'stop', 'status'] } },
+        properties: { action: { type: 'string', enum: ['open', 'close', 'play', 'stop', 'next', 'status'] } },
         required: ['action'],
       },
-      isDeferred: false,
+      isDeferred: true,
     })
     return next(e)
   })
 
   on('session.end', async ($, e, next) => {
-    stopAll()
+    radio.stop()
+    ticker?.cancel()
+    ticker = undefined
     return next(e)
   })
 
-  on('command.run', { command: 'music' }, async $ => {
-    await $.ui.open({ id: PANE, title: 'lofi' })
-    ticker ??= $.clock.every(FRAME_MS, () => $.ui.invalidate('ui.render'))
-    if (!audio.isStopped) {
-      stopAll()
+  on('command.run', { command: 'music' }, async ($, e) => {
+    const arg = e.args.trim().toLowerCase()
+    if (arg === 'next') {
+      nextScene()
+      if (!paneOpen) await openPane($)
+      return { text: `Scene: ${sceneAt(sceneIndex).name}.` }
+    }
+    if (arg === 'fm') {
+      pause()
+      const opened = await openInBrowser(hostOf($), FM_URL)
+      return {
+        text: opened
+          ? 'Stopped the radio and opened Claude FM in your browser.'
+          : `Stopped the radio. Open Claude FM here: ${FM_URL}`,
+      }
+    }
+    if (arg !== '') return { text: 'Use /music to start or stop, /music next for the next scene, /music fm for Claude FM.' }
+    if (radio.state.isPlaying) {
+      pause()
+      await $.ui.close({ id: PANE }).catch(() => undefined)
+      paneOpen = false
       return { text: 'Music stopped.' }
     }
-    await playEngine($)
-    return { text: 'Spike: playing through the engine player ($.audio.play).' }
+    await openPane($)
+    const s = await play($)
+    return {
+      text: s.isPlaying
+        ? `Playing ${STATION_LABEL}. /music again to stop, /music next for another scene.`
+        : `The pane is open, but the radio could not start: ${s.problem ?? 'no player'}`,
+    }
   })
 
   on('ui.close', async ($, e, next) => {
-    if (e.id === PANE || e.id === MINI) {
-      ticker?.cancel()
-      ticker = undefined
-    }
+    if (e.id === PANE) paneOpen = false
     return next(e)
   })
 
-  // One unfiltered hook: it answers the spike tool and counts every other call.
+  // Counts every tool call (for the character's mood) and answers our own.
   on('tool.call', async ($, e, next) => {
-    if ((e.tool as string) !== SPIKE_TOOL) {
-      busy++
-      lastToolAt = await $.clock.now()
-      try {
-        return await next(e)
-      } finally {
-        busy = Math.max(0, busy - 1)
-        lastToolAt = await $.clock.now()
+    if ((e.tool as string) === OWN_TOOL) {
+      const action = (e as unknown as { action?: string }).action ?? 'status'
+      if (action === 'open') await openPane($)
+      else if (action === 'close') await $.ui.close({ id: PANE }).catch(() => undefined)
+      else if (action === 'play') await play($)
+      else if (action === 'stop') pause()
+      else if (action === 'next') nextScene()
+      const report = {
+        pane: paneOpen ? 'open' : 'closed',
+        radio: radio.state,
+        nowPlaying: nowLine(),
+        recent,
+        scene: sceneAt(sceneIndex).name,
+        mood,
+        timeOfDay: tod,
       }
+      return { result: JSON.stringify(report, null, 1) } as never
     }
-    const action = (e as unknown as { action?: string }).action ?? 'status'
-    let note = ''
-    if (action === 'open') {
-      const opened = await $.ui.open({ id: PANE, title: 'lofi' })
-      ticker ??= $.clock.every(FRAME_MS, () => $.ui.invalidate('ui.render'))
-      note = `opened: ${JSON.stringify(opened)}`
-    } else if (action === 'widget') {
-      const opened = await $.ui.open({ id: MINI, title: 'lofi', placement: 'widget' })
-      ticker ??= $.clock.every(FRAME_MS, () => $.ui.invalidate('ui.render'))
-      note = `widget opened: ${JSON.stringify(opened)}`
-    } else if (action === 'mock') {
-      ticker?.cancel()
-      ticker = undefined
-      await $.ui.close({ id: PANE }).catch(() => undefined)
-      await $.ui.close({ id: MINI }).catch(() => undefined)
-      const opened = await $.ui.open({ id: SVG_PANE, title: 'lofi' })
-      note = `mock opened: ${JSON.stringify(opened)}, svg ${SCENE.length} chars`
-    } else if (action === 'engine') {
-      await playEngine($)
-    } else if (action === 'ffplay' || action === 'wmp') {
-      await playProcess($, action)
-    } else if (action === 'stop') {
-      stopAll()
+    const now = Date.now()
+    if (busy++ === 0) busySince = now
+    lastToolAt = now
+    try {
+      return await next(e)
+    } finally {
+      busy = Math.max(0, busy - 1)
+      lastToolAt = Date.now()
     }
-    const now = await $.clock.now()
-    const report = {
-      note,
-      pane: seat,
-      isTicking: ticker !== undefined,
-      renders: renders.length,
-      svgRenders: svgRenders.length,
-      svgGapsMs: svgRenders.slice(-8).map((t, i, a) => (i ? t - (a[i - 1] ?? t) : 0)),
-      last5s: smoothness(now),
-      audio: { ...audio, ageMs: now - audio.startedAt },
-      info: await $.session.info().then(i => ({ platform: i.platform, isHosted: i.isHosted })).catch((err: unknown) => String(err)),
-    }
-    return { result: JSON.stringify(report, null, 1) } as never
   })
 
   on('ui.render', { component: 'Pane' }, async ($, e, next) => {
-    if (e.requestId === SVG_PANE) {
-      if (e.surface !== 'desktop') {
-        const { Text } = $.ui.resolve(e)
-        return <Text dimColor>The mock-up draws in the desktop app only.</Text>
-      }
-      const { Box, Text, Button, Svg } = $.ui.resolve(e)
-      const p = e.props as { bodyColumns: number; placement: string; scroll?: { bodyRows: number } }
-      seat = `${e.requestId}: ${e.surface} ${p.placement} ${p.bodyColumns}x${p.scroll?.bodyRows ?? '?'}`
-      svgRenders.push(Date.now())
-      const isPlaying = !audio.isStopped
-      const toggle = async () => {
-        if (isPlaying) stopAll()
-        else await playProcess($, 'ffplay')
-        $.ui.invalidate('ui.render')
-      }
-      const nextScene = () => void $.ui.toast('Mock: scenes rotate in the real build.')
-      // In its frame an Svg keeps its own size, so both are sized to the pane.
-      const L = paneLayout(p.bodyColumns, p.scroll?.bodyRows ?? 39)
-      // Rebuild the card only when play state or layout changes: a new SVG restarts its animations.
-      const key = `${isPlaying}|${L.compact}|${L.stripUnits}`
-      if (!card || card.key !== key) {
-        const elapsedSec = Math.max(0, Math.round((Date.now() - songStartMs) / 1000))
-        card = {
-          key,
-          svg: cardSvg(
-            { ...SAMPLE.now, station: 'ChillHop · FluxFM', elapsedSec, isPlaying, recent: SAMPLE.recent.slice(0, 3) },
-            { compact: L.compact, stripUnits: L.stripUnits },
-          ),
-        }
-      }
+    if (e.requestId !== PANE) return next(e)
+    paneOpen = true
+    ensureTicker($)
+    const now = Date.now()
+    const isPlaying = radio.state.isPlaying
+    const scene = sceneAt(sceneIndex)
+    const toggle = async () => {
+      if (radio.state.isPlaying) pause()
+      else await play($)
+      redraw()
+    }
+    const title = song?.title ?? (isPlaying ? `${STATION} live` : 'lofi radio')
+    const artist = song?.artist ?? (isPlaying ? 'waiting for the song title…' : radio.state.problem ?? 'press ▶ play to start')
+
+    if (e.surface !== 'desktop') {
+      // Surfaces without Svg (the terminal): a short text version.
+      const { Box, Text, Button } = $.ui.resolve(e)
       return (
-        <Box flexDirection="column" alignItems="center" gap={1}>
-          <Box position="relative" flexDirection="column">
-            <Svg isInteractive width={L.cardW} height={L.cardH} source={card.svg} alt={'Now playing ' + SAMPLE.now.title + ' by ' + SAMPLE.now.artist} />
-            <Box position="absolute" top={0} left={L.buttonsLeft} flexDirection="row" gap={2}>
-              <Button key="play" plain onPress={toggle}>
-                <Text mono size="caption" color="claude">{isPlaying ? '❚❚ pause' : '▶ play'}</Text>
-              </Button>
-              <Button key="next" plain onPress={nextScene}>
-                <Text mono size="caption" dimColor>» next scene</Text>
-              </Button>
-            </Box>
+        <Box flexDirection="column" paddingX={1}>
+          <Text color="claude">{`♪ ${title}`}</Text>
+          <Text dimColor>{`${artist} · ${STATION_LABEL} · ${mmss(elapsedSec(now))}`}</Text>
+          <Box flexDirection="row" gap={1}>
+            <Button key="play" label={isPlaying ? 'pause' : 'play'} variant="primary" onPress={toggle} />
+            <Button key="next" label="next scene" onPress={nextScene} />
           </Box>
-          <Svg isInteractive width={L.sceneW} height={L.sceneH} source={SCENE} alt="A rainy ASCII city at night, with a small pixel character in headphones" />
+          <Text dimColor>{`${scene.name} · ${mood}${recent.length ? ` · before: ${recent[0]!.title}` : ''}`}</Text>
         </Box>
       )
     }
-    if (e.requestId !== PANE && e.requestId !== MINI) return next(e)
-    const { Box, Text } = $.ui.resolve(e)
-    const now = await $.clock.now()
-    renders.push(now)
-    if (renders.length > 400) renders = renders.slice(-200)
-    const p = e.props as {
-      bodyColumns: number
-      placement: string
-      scroll?: { bodyRows: number }
-      anchoredEdges?: readonly string[]
+
+    const { Box, Text, Button, Svg } = $.ui.resolve(e)
+    const p = e.props as { bodyColumns: number; scroll?: { bodyRows: number } }
+    // In its frame an Svg keeps its own size, so both are sized to the pane.
+    const L = paneLayout(p.bodyColumns, p.scroll?.bodyRows ?? 39)
+    // Rebuild an SVG only when what it shows changes; animations are pinned
+    // to the clock, so a rebuilt one carries on where it was.
+    setClock(now / 1000)
+    const cardKey = [isPlaying, L.compact, L.stripUnits, title, artist, recent.map(r => r.title).join('|')].join('¦')
+    if (cardCache?.key !== cardKey) {
+      cardCache = {
+        key: cardKey,
+        svg: cardSvg(
+          { title, artist, station: STATION_LABEL, elapsedSec: elapsedSec(now), isPlaying, recent },
+          { compact: L.compact, stripUnits: L.stripUnits },
+        ),
+      }
     }
-    seat = `${e.requestId}: ${e.surface} ${p.placement} ${p.bodyColumns}x${p.scroll?.bodyRows ?? '?'} edges=${JSON.stringify(p.anchoredEdges ?? null)}`
-    const mood = moodAt(now) as Mood
-    const cols = Math.max(12, Math.min(p.bodyColumns, 120))
-    const room = (p.scroll?.bodyRows ?? 14) - 1
-    // A wide, short card: height follows width, and never more than the room.
-    const sceneRows = Math.max(4, Math.min(room, Math.round(cols / 4), 14))
-    const d = new Date(now)
-    const clock = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-    const inkText = (ink: Ink, text: string) =>
-      ink === 'body' ? (
-        <Text color="claude">{text}</Text>
-      ) : ink === 'phones' ? (
-        <Text color="suggestion">{text}</Text>
-      ) : ink === 'faint' ? (
-        <Text dimColor>{text}</Text>
-      ) : ink === 'subtle' ? (
-        <Text color="subtle">{text}</Text>
-      ) : (
-        <Text>{text}</Text>
-      )
+    const ctx = { tod, mood }
+    const sceneKey = `${scene.id}¦${tod}¦${mood}`
+    if (sceneCache?.key !== sceneKey) sceneCache = { key: sceneKey, svg: scene.build(ctx) }
     return (
-      <Box flexDirection="column">
-        {drawFrame(cols, sceneRows, now, mood, clock).map(runs => (
-          <Text mono wrap="clip">
-            {runs.map(r => inkText(r.ink, r.text))}
-          </Text>
-        ))}
+      <Box flexDirection="column" alignItems="center" gap={1}>
+        <Box position="relative" flexDirection="column">
+          <Svg isInteractive width={L.cardW} height={L.cardH} source={cardCache.svg} alt={`Now playing: ${nowLine()}`} />
+          <Box position="absolute" top={0} left={L.buttonsLeft} flexDirection="row" gap={2}>
+            <Button key="play" plain onPress={toggle}>
+              <Text mono size="caption" color="claude">{isPlaying ? '❚❚ pause' : '▶ play'}</Text>
+            </Button>
+            <Button key="next" plain onPress={nextScene}>
+              <Text mono size="caption" dimColor>» next scene</Text>
+            </Button>
+          </Box>
+        </Box>
+        <Svg isInteractive width={L.sceneW} height={L.sceneH} source={sceneCache.svg} alt={scene.alt(ctx)} />
       </Box>
     )
   })
 }
+
