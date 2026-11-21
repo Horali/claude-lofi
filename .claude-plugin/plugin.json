@@ -1,6 +1,6 @@
 {
   "name": "lofi-desk",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Lofi radio beside the chat: a now-playing card with live song titles and an animated ASCII scene whose pixel character reacts to tool calls. Type /music.",
   "author": {
     "name": "Horali"
@@ -9,7 +9,9 @@
   "network": {
     "hosts": [
       "channels.fluxfm.de",
-      "streams.fluxfm.de"
+      "streams.fluxfm.de",
+      "fluxmusic.api.radiosphere.io",
+      "musicbrainz.org"
     ]
   }
 }
