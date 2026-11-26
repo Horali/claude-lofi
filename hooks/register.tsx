@@ -223,6 +223,23 @@ async function releaseClaim($: EngineInterface) {
   if (claim?.owner === ME) await $.store.delete('radio').catch(() => undefined)
 }
 
+// The Context Gauge's Music button (like its Live and Mods buttons) leaves an
+// empty file ~/.claude/mods/.open-lofi-desk-<session>. Seeing it opens the pane
+// and starts the radio in this chat.
+const OPEN_MS = 700
+const homeOf = ($: EngineInterface) => $.plugin.root.split('\\').join('/').split('/.claude/')[0] ?? ''
+let openRequest = ''
+
+async function checkOpenRequest($: EngineInterface) {
+  if (!openRequest) openRequest = `${homeOf($)}/.claude/mods/.open-lofi-desk-${await $.session.id()}`
+  if (!(await $.fs.exists(openRequest).catch(() => false))) return
+  const windows = (await hostOf($).platform()) === 'windows'
+  const path = windows ? openRequest.split('/').join('\\') : openRequest
+  await hostOf($).run(windows ? ['cmd', '/d', '/c', 'del', '/f', '/q', path] : ['rm', '-f', path], 5000).catch(() => undefined)
+  await openPane($)
+  if (!radio.state.isPlaying) await play($)
+}
+
 async function openPane($: EngineInterface) {
   paneOpen = true
   ensureTicker($)
@@ -261,6 +278,9 @@ export const register: Register = on => {
         required: ['action'],
       },
       isDeferred: true,
+    })
+    $.clock.every(OPEN_MS, () => {
+      void checkOpenRequest($).catch(() => undefined)
     })
     return next(e)
   })
